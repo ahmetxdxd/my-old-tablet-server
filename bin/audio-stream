@@ -1,0 +1,28 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - Live PCM Audio Stream Pipeline
+# ==============================================================================
+# Decodes any stream URL or audio file using mpv and pipes raw 44.1kHz 16-bit
+# stereo PCM directly to the Android AudioBridge daemon (127.0.0.1:4711).
+# ==============================================================================
+
+STREAM_URL="$1"
+
+if [ -z "$STREAM_URL" ]; then
+    echo "Usage: audio-stream <url|file>"
+    exit 1
+fi
+
+echo "[Audio-Stream] Initializing stream: $STREAM_URL"
+
+# Decode via mpv and pipe PCM directly to AudioBridge TCP port 4711
+mpv \
+    --no-video \
+    --really-quiet \
+    --ao=pcm \
+    --ao-pcm-file=/proc/self/fd/1 \
+    --ao-pcm-waveheader=no \
+    --audio-format=s16 \
+    --audio-samplerate=44100 \
+    --audio-channels=stereo \
+    "$STREAM_URL" 2>/dev/null | nc 127.0.0.1 4711

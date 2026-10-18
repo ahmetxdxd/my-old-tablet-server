@@ -1,0 +1,29 @@
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+*.swp
+*~
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Sensitive credentials & keys
+id_rsa*
+id_ed25519*
+*.pem
+*.key
+
+# Local large backups
+*_backup/
+packages/retro/*.apk
+!packages/retro/README.md
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/

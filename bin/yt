@@ -1,0 +1,59 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - Kernel 3.4.5 Compatible YouTube Audio Player
+# ==============================================================================
+# - Forces IPv4 (-4) to prevent TLS handshakes & 403 Forbidden streaming errors.
+# - Streams best audio directly to Android AudioBridge (127.0.0.1:4711).
+# ==============================================================================
+
+QUERY="$*"
+
+if [ -z "$QUERY" ]; then
+    echo "Usage:"
+    echo "  yt <youtube-url or search query>"
+    echo "Examples:"
+    echo "  yt 'Lofi hip hop beats'"
+    echo "  yt https://www.youtube.com/watch?v=XXXX"
+    echo "  yt stop"
+    exit 1
+fi
+
+if [ "$QUERY" = "stop" ]; then
+    pkill -f "yt-dlp" 2>/dev/null || true
+    pkill -f "ao-pcm-file=/proc/self/fd/1" 2>/dev/null || true
+    echo "[YouTube] Playback stopped."
+    exit 0
+fi
+
+echo "[YouTube] Resolving audio stream for: $QUERY"
+
+pkill -f "yt-dlp" 2>/dev/null || true
+pkill -f "ao-pcm-file=/proc/self/fd/1" 2>/dev/null || true
+
+TARGET="$QUERY"
+if [[ ! "$QUERY" =~ ^https?:// ]]; then
+    TARGET="ytsearch1:$QUERY"
+fi
+
+STREAM_URL=$(yt-dlp -4 --js-runtimes quickjs -g -f "ba/b" "$TARGET" 2>/dev/null | head -n 1)
+
+if [ -z "$STREAM_URL" ]; then
+    echo "[ERROR] Stream resolution failed. Please check network connectivity."
+    exit 1
+fi
+
+echo "[YouTube] Streaming audio to tablet speakers..."
+(
+    mpv \
+        --no-video \
+        --really-quiet \
+        --ao=pcm \
+        --ao-pcm-file=/proc/self/fd/1 \
+        --ao-pcm-waveheader=no \
+        --audio-format=s16 \
+        --audio-samplerate=44100 \
+        --audio-channels=stereo \
+        "$STREAM_URL" 2>/dev/null | nc 127.0.0.1 4711
+) >/dev/null 2>&1 &
+
+echo "[YouTube] Now playing! Stop command: yt stop"

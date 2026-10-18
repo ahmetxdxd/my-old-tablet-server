@@ -1,0 +1,51 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - Audio Player Tool (via Android Media Engine)
+# ==============================================================================
+# Uses Android AudioFlinger / MediaPlayer instead of raw ALSA.
+# Preserves Marvell PMIC hardware calibration with zero crackling.
+# ==============================================================================
+
+TARGET_FILE="$1"
+
+if [ -z "$TARGET_FILE" ]; then
+    echo "Usage:"
+    echo "  play-sound <file.mp3/wav/ogg> : Play audio file on tablet speakers"
+    echo "  play-sound stop               : Stop currently playing audio"
+    exit 1
+fi
+
+if [ "$TARGET_FILE" = "stop" ]; then
+    if command -v nc >/dev/null 2>&1; then
+        echo "STOP" | nc -w 1 127.0.0.1 4712 2>/dev/null || true
+    fi
+    pkill -f "stagefright" 2>/dev/null || true
+    pkill -f "mpv" 2>/dev/null || true
+    echo "[Audio] Playback stopped."
+    exit 0
+fi
+
+if [ ! -f "$TARGET_FILE" ]; then
+    echo "[ERROR] File not found: $TARGET_FILE"
+    exit 1
+fi
+
+REAL_PATH=$(readlink -f "$TARGET_FILE")
+echo "[Audio] Playing: $REAL_PATH"
+
+# Priority 1: AudioBridge Dalvik command socket (127.0.0.1:4712)
+if command -v nc >/dev/null 2>&1 && nc -z 127.0.0.1 4712 2>/dev/null; then
+    RESP=$(echo "PLAY $REAL_PATH" | nc -w 2 127.0.0.1 4712 2>/dev/null)
+    if [ "$RESP" = "OK" ]; then
+        exit 0
+    fi
+fi
+
+# Priority 2: Stagefright CLI player
+if [ -x /system/bin/stagefright ]; then
+    /system/bin/stagefright -a -o "$REAL_PATH" >/dev/null 2>&1 &
+    exit 0
+fi
+
+# Priority 3: Android Intent
+/system/bin/am start -a android.intent.action.VIEW -d "file://$REAL_PATH" -t "audio/*" >/dev/null 2>&1 &

@@ -1,0 +1,207 @@
+#!/bin/sh
+# ==============================================================================
+# My Tablet Server - CCTV & Continuous Security Camera System
+# ==============================================================================
+# Turns the tablet into an autonomous 24/7 CCTV surveillance recorder.
+# - Hardware V4L2 H.264 video encoding via ffmpeg
+# - Works silently in Headless Server Mode (screen off, max power save)
+# - Configurable storage quota (auto-prunes oldest recordings when full - FIFO)
+# - Segmented recordings (e.g. 10-minute files) to ensure no footage is lost
+# ==============================================================================
+
+set -e
+
+DIR="/sdcard/CCTV"
+PID_FILE="/tmp/cctv.pid"
+CONF_FILE="/tmp/cctv.conf"
+LOG_FILE="/tmp/cctv.log"
+
+GREEN='\033[01;32m'
+BLUE='\033[01;34m'
+YELLOW='\033[01;33m'
+RED='\033[01;31m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+log_info() { echo -e "${BLUE}[CCTV] $1${NC}"; }
+log_ok() { echo -e "${GREEN}✓ $1${NC}"; }
+log_warn() { echo -e "${YELLOW}[CCTV WARN] $1${NC}"; }
+log_err() { echo -e "${RED}[CCTV ERROR] $1${NC}"; }
+
+# Calculate total size of recordings in MB
+get_current_size_mb() {
+    if [ ! -d "$DIR" ] || [ -z "$(ls -A "$DIR" 2>/dev/null)" ]; then
+        echo 0
+        return
+    fi
+    du -sm "$DIR" 2>/dev/null | awk '{print $1}' || echo 0
+}
+
+# Auto-prune oldest recordings if size exceeds MAX_GB
+prune_old_recordings() {
+    local MAX_MB="$1"
+    local CUR_MB=$(get_current_size_mb)
+    
+    while [ "$CUR_MB" -gt "$MAX_MB" ]; do
+        # Find oldest mp4 file
+        OLDEST=$(ls -tr "$DIR"/*.mp4 2>/dev/null | head -n 1)
+        if [ -n "$OLDEST" ] && [ -f "$OLDEST" ]; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Storage quota ($MAX_MB MB) reached. Pruning oldest video: $(basename "$OLDEST")" >> "$LOG_FILE"
+            rm -f "$OLDEST"
+            CUR_MB=$(get_current_size_mb)
+        else
+            break
+        fi
+    done
+}
+
+# Continuous recording loop
+recorder_daemon() {
+    local MAX_GB="$1"
+    local SEG_MIN="$2"
+    local MAX_MB=$((MAX_GB * 1024))
+    local SEG_SEC=$((SEG_MIN * 60))
+
+    mkdir -p "$DIR"
+    echo "$$" > "$PID_FILE"
+    echo "MAX_GB=$MAX_GB" > "$CONF_FILE"
+    echo "SEG_MIN=$SEG_MIN" >> "$CONF_FILE"
+    echo "START_TIME=$(date '+%Y-%m-%d %H:%M:%S')" >> "$CONF_FILE"
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] CCTV Surveillance Service started. Quota: ${MAX_GB}GB, Segment: ${SEG_MIN}m" > "$LOG_FILE"
+
+    # Ensure camera permissions
+    chmod 666 /dev/video0 2>/dev/null || true
+
+    while true; do
+        prune_old_recordings "$MAX_MB"
+        
+        TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
+        OUT_FILE="$DIR/cctv_${TIMESTAMP}.mp4"
+
+        # Record segment using hardware V4L2 with low CPU preset (15 fps, 640x480)
+        ffmpeg -y -f v4l2 -input_format yuv420p -video_size 640x480 -i /dev/video0 \
+            -t "$SEG_SEC" -r 15 -c:v libx264 -preset ultrafast -crf 28 -an \
+            "$OUT_FILE" >> "$LOG_FILE" 2>&1 || true
+
+        # Small pause between segments
+        sleep 1
+    done
+}
+
+case "${1:-}" in
+    start)
+        if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; then
+            log_warn "CCTV Security Camera is already recording! (PID: $(cat "$PID_FILE"))"
+            echo "Run 'cctv status' or 'cctv stop'."
+            exit 0
+        fi
+
+        MAX_GB="${2:-5}"
+        SEG_MIN="${3:-10}"
+
+        log_info "Starting CCTV Security Camera in background..."
+        echo -e "  Storage Quota     : ${GREEN}${MAX_GB} GB${NC} (Auto-cleans oldest when full)"
+        echo -e "  Video Segments    : ${GREEN}${SEG_MIN} minutes per file${NC}"
+        echo -e "  Storage Location  : ${YELLOW}$DIR${NC}"
+        echo -e "  Camera Device     : ${YELLOW}/dev/video0${NC} (640x480 @ 15fps H.264)"
+
+        # Launch recorder in background disconnected from terminal
+        (recorder_daemon "$MAX_GB" "$SEG_MIN") >/dev/null 2>&1 &
+
+        sleep 2
+        if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; then
+            log_ok "CCTV Security Camera successfully running! (PID: $(cat "$PID_FILE"))"
+            echo -e "Tips: You can turn screen off with ${YELLOW}server-mode enable${NC} to save power."
+        else
+            log_err "Failed to start camera recording! Check /tmp/cctv.log"
+            exit 1
+        fi
+        ;;
+
+    stop)
+        if [ ! -f "$PID_FILE" ] || ! kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; then
+            log_warn "CCTV Security Camera is not running."
+            rm -f "$PID_FILE" 2>/dev/null || true
+            exit 0
+        fi
+
+        PID=$(cat "$PID_FILE")
+        log_info "Stopping CCTV Security Camera (PID: $PID)..."
+        
+        # Kill recorder loop and any active ffmpeg process
+        kill "$PID" 2>/dev/null || true
+        pkill -P "$PID" 2>/dev/null || true
+        pkill -f "ffmpeg.*video0" 2>/dev/null || true
+        rm -f "$PID_FILE" 2>/dev/null || true
+
+        log_ok "CCTV recording stopped safely. All saved videos are in $DIR"
+        ;;
+
+    status)
+        echo -e "${BLUE}${BOLD}======================================================================${NC}"
+        echo -e "         ${BOLD}CCTV SURVEILLANCE & SECURITY CAMERA STATUS${NC}                   "
+        echo -e "${BLUE}${BOLD}======================================================================${NC}"
+        if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; then
+            echo -e "  Status            : ${GREEN}${BOLD}RECORDING (ACTIVE)${NC}"
+            echo -e "  Daemon PID        : $(cat "$PID_FILE")"
+            [ -f "$CONF_FILE" ] && cat "$CONF_FILE" | while read -r line; do echo "  Config            : $line"; done
+        else
+            echo -e "  Status            : ${RED}STOPPED${NC}"
+        fi
+        
+        CUR_MB=$(get_current_size_mb)
+        TOTAL_FILES=$(ls -1 "$DIR"/*.mp4 2>/dev/null | wc -l || echo 0)
+        FREE_DISK=$(df -h /sdcard 2>/dev/null | awk 'NR==2 {print $4}' || echo "N/A")
+
+        echo -e "  Storage Location  : $DIR"
+        echo -e "  Recorded Videos   : ${GREEN}$TOTAL_FILES files${NC}"
+        echo -e "  Storage Used      : ${YELLOW}$CUR_MB MB${NC}"
+        echo -e "  SD Card Free Space: ${GREEN}$FREE_DISK${NC}"
+        echo -e "${BLUE}${BOLD}======================================================================${NC}"
+        ;;
+
+    list)
+        echo -e "\n${BOLD}Recorded CCTV Footage in $DIR:${NC}"
+        if [ ! -d "$DIR" ] || [ -z "$(ls -A "$DIR"/*.mp4 2>/dev/null)" ]; then
+            echo "  (No recordings found)"
+        else
+            ls -lh "$DIR"/*.mp4 2>/dev/null | awk '{print "  " $9 " (" $5 ")"}'
+        fi
+        echo ""
+        ;;
+
+    clean|purge)
+        read -p "Are you sure you want to delete ALL recorded CCTV videos? [y/N]: " CONFIRM
+        case "$CONFIRM" in
+            [yY]|[yY][eE][sS])
+                rm -f "$DIR"/*.mp4
+                log_ok "All CCTV footage deleted."
+                ;;
+            *)
+                echo "Aborted."
+                ;;
+        esac
+        ;;
+
+    log|logs)
+        [ -f "$LOG_FILE" ] && tail -n 30 "$LOG_FILE" || echo "No logs available."
+        ;;
+
+    *)
+        echo "Usage: cctv <command> [options]"
+        echo ""
+        echo "Commands:"
+        echo "  cctv start [max_gb] [seg_min] : Start CCTV surveillance (default: 5GB quota, 10m segments)"
+        echo "  cctv stop                     : Stop surveillance recording safely"
+        echo "  cctv status                   : Show recording status, quota and storage stats"
+        echo "  cctv list                     : List all saved CCTV footage files"
+        echo "  cctv clean                    : Delete all saved CCTV recordings"
+        echo "  cctv logs                     : View recent camera daemon logs"
+        echo ""
+        echo "Examples:"
+        echo "  cctv start 2 5               # 2 GB storage limit, 5-minute video chunks"
+        echo "  cctv start 10                # 10 GB storage limit, 10-minute video chunks"
+        echo ""
+        ;;
+esac

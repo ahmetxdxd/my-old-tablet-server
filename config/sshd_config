@@ -1,0 +1,12 @@
+Port 22
+Port 2222
+PermitRootLogin yes
+PubkeyAuthentication yes
+PasswordAuthentication yes
+PermitEmptyPasswords no
+UseDNS no
+Subsystem sftp /usr/lib/ssh/sftp-server
+AcceptEnv LANG LC_*
+PrintMotd yes
+ClientAliveInterval 30
+ClientAliveCountMax 5

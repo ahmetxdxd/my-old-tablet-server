@@ -1,0 +1,131 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - Master Control CLI
+# ==============================================================================
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PATH="$DIR:$PATH"
+
+ACTION="${1:-status}"
+
+case "$ACTION" in
+    status|info)
+        server-mode status
+        ;;
+    console|attach)
+        console
+        ;;
+    linux|server|headless|enable)
+        server-mode linux
+        ;;
+    android|gui|tablet|normal|desktop)
+        server-mode android
+        ;;
+    hybrid|hibrit|dual)
+        server-mode hybrid
+        ;;
+    screen-on|tty)
+        shift
+        server-mode screen-on "$@"
+        ;;
+    screen-off)
+        server-mode screen-off
+        ;;
+    screen)
+        shift
+        screen-ctrl "$@"
+        ;;
+    audio|play)
+        shift
+        play-sound "$@"
+        ;;
+    radio)
+        shift
+        radio "$@"
+        ;;
+    yt|youtube)
+        shift
+        yt "$@"
+        ;;
+    alarm)
+        shift
+        alarm "$@"
+        ;;
+    cctv|camera)
+        shift
+        cctv "$@"
+        ;;
+    retro|games)
+        shift
+        retro-store "$@"
+        ;;
+    watch|video)
+        shift
+        watch "$@"
+        ;;
+    auto-downloader|downloader|apps)
+        shift
+        auto-downloader "$@"
+        ;;
+    agy|antigravity)
+        shift
+        agy "$@"
+        ;;
+    hermes)
+        shift
+        hermes "$@"
+        ;;
+    screensaver|ambient|sus)
+        shift
+        screensaver "$@"
+        ;;
+    second-screen|screen2|ekran2|display)
+        shift
+        second-screen "$@"
+        ;;
+    anime)
+        shift
+        anime "$@"
+        ;;
+    speakers|hoparlor|stereo)
+        shift
+        stereo-speakers "$@"
+        ;;
+    cava)
+        shift
+        stereo-speakers cava "$@"
+        ;;
+    debloat|optimize|clean)
+        shift
+        debloat-tablet "$@"
+        ;;
+    *)
+        echo "======================================================"
+        echo "         MY TABLET SERVER (CLI Master Helper)         "
+        echo "======================================================"
+        echo "Usage: my-tablet-server <command>"
+        echo ""
+        echo "Operation Modes:"
+        echo "  my-tablet-server linux       : Pure Linux Server Mode (Screen OFF, Max RAM)"
+        echo "  my-tablet-server android     : Pure Android Tablet Mode (Linux STOPPED)"
+        echo "  my-tablet-server hybrid      : Hybrid Mode (Android UI + Hermes Timers & Cron)"
+        echo "  my-tablet-server status      : Show current operation mode & resource status"
+        echo ""
+        echo "Tools & Features:"
+        echo "  my-tablet-server speakers    : Dual Tablet PC Stereo Speakers (Wired/Wi-Fi)"
+        echo "  my-tablet-server cava        : Live Frutiger Aero Audio Spectrum Visualizer"
+        echo "  my-tablet-server second-screen : Use tablet as PC second display (Wired USB / Wi-Fi)"
+        echo "  my-tablet-server debloat       : Safe Debloater (Frees 300MB+ RAM on all tablets)"
+        echo "  my-tablet-server screensaver : Frutiger Aero art, aquarium, fireplace screensaver"
+        echo "  my-tablet-server cctv        : Security Camera 24/7 video recording"
+        echo "  my-tablet-server retro       : Retro & Classic games catalog (Archive.org)"
+        echo "  my-tablet-server console     : Attach to live mirrored tmux console"
+        echo "  my-tablet-server radio <st>  : Stream internet radio (lofi, jazz, rock)"
+        echo "  my-tablet-server yt '<query>': Stream audio from YouTube"
+        echo "  my-tablet-server anime       : Ad-free Anime player (AnimeDLR, Animecix, Miruro)"
+        echo "  my-tablet-server watch <URL> : Stream video (Anime/YouTube/Films) to VLC"
+        echo "  my-tablet-server screen-off  : Turn off display backlight (save power)"
+        echo "  my-tablet-server screen-on   : Turn on display backlight / TTY"
+        echo "======================================================"
+        ;;
+esac

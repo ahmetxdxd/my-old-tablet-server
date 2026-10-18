@@ -1,0 +1,360 @@
+#!/bin/bash
+# ==============================================================================
+# MY TABLET SERVER - Dual Tablet PC Stereo Speakers & CAVA Visualizer Manager
+# ==============================================================================
+# Turns your tablets into low-latency, hardware-synchronized external stereo
+# PC speakers with live Frutiger Aero CAVA audio frequency spectrum visualization!
+#
+# Supports:
+# - Both tablets as Left (Samsung SM-T210) & Right (Vestel V Tab) True Stereo
+# - Both Wi-Fi and USB Cable
+# - Web Control Dashboard at http://localhost:1780
+# - Live CAVA visualizer on PC and Tablet Screen
+# ==============================================================================
+
+set -e
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd || echo "")"
+
+GREEN='\033[01;32m'
+BLUE='\033[01;34m'
+YELLOW='\033[01;33m'
+RED='\033[01;31m'
+CYAN='\033[01;36m'
+MAGENTA='\033[01;35m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+CONF_DIR="$DIR/config"
+CONF_FILE="$CONF_DIR/snapserver.conf"
+CAVA_CONF="$CONF_DIR/cava.conf"
+LOG_DIR="/tmp/snapcast"
+PID_FILE="$LOG_DIR/snapserver.pid"
+LOG_FILE="$LOG_DIR/snapserver.log"
+
+log_info() { echo -e "${BLUE}[BİLGİ]${NC} $1"; }
+log_ok()   { echo -e "${GREEN}[TAMAM] ✓${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[UYARI]${NC} $1"; }
+log_err()  { echo -e "${RED}[HATA]${NC} $1"; }
+
+get_pc_ip() {
+    ip -4 addr show wlan0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n1 || \
+    ip -4 route get 1.1.1.1 2>/dev/null | grep -oP '(?<=src\s)\d+(\.\d+){3}' | head -n1 || echo "127.0.0.1"
+}
+
+get_default_sink_id() {
+    pactl list short sources 2>/dev/null | grep -i "\.monitor" | grep -i "speaker" | awk '{print $1}' | head -n1 || \
+    pactl list short sources 2>/dev/null | grep -i "\.monitor" | awk '{print $1}' | head -n1 || echo "@DEFAULT_SINK@.monitor"
+}
+
+ensure_library_deps() {
+    mkdir -p "$DIR/lib"
+    if [ ! -f "$DIR/lib/libFLAC.so.12" ]; then
+        if [ -f "/usr/lib/libFLAC.so.14" ]; then
+            ln -sf /usr/lib/libFLAC.so.14 "$DIR/lib/libFLAC.so.12" 2>/dev/null || true
+        elif [ -f "/usr/lib/libFLAC.so" ]; then
+            ln -sf /usr/lib/libFLAC.so "$DIR/lib/libFLAC.so.12" 2>/dev/null || true
+        fi
+    fi
+}
+
+ensure_snapserver_bin() {
+    if which snapserver >/dev/null 2>&1; then
+        SNAP_BIN="snapserver"
+    elif [ -x "$DIR/bin/snapserver" ]; then
+        SNAP_BIN="$DIR/bin/snapserver"
+    else
+        log_err "Snapserver ikili dosyası bulunamadı!"
+        echo "Lütfen 'paru -S snapcast' veya 'sudo pacman -S snapcast' komutuyla kurun."
+        exit 1
+    fi
+}
+
+ensure_config() {
+    mkdir -p "$CONF_DIR" "$LOG_DIR"
+    ensure_library_deps
+
+    local SINK_ID=$(get_default_sink_id)
+
+    if [ ! -f "$CONF_FILE" ]; then
+        log_info "Öntanımlı Snapserver yapılandırması oluşturuluyor: $CONF_FILE"
+        cat << EOF > "$CONF_FILE"
+# ==============================================================================
+# MY TABLET SERVER - Snapserver Configuration
+# ==============================================================================
+[server]
+threads = -1
+datadir = $LOG_DIR
+
+[http]
+enabled = true
+bind_to_address = 0.0.0.0
+port = 1780
+
+[tcp]
+enabled = true
+bind_to_address = 0.0.0.0
+port = 1705
+
+[stream]
+bind_to_address = 0.0.0.0
+port = 1704
+sampleformat = 48000:16:2
+codec = flac
+chunk_ms = 20
+buffer = 150
+# Live PipeWire Master capture from PC speakers
+source = process:///usr/bin/pw-record?name=PC_Master&codec=flac&sampleformat=48000:16:2&params=--target%20$SINK_ID%20--raw%20--rate%2048000%20--channels%202%20--format%20s16%20-
+EOF
+    fi
+
+    # CAVA Config
+    if [ ! -f "$CAVA_CONF" ]; then
+        cat << 'EOF' > "$CAVA_CONF"
+[general]
+framerate = 60
+bars = 0
+bar_width = 2
+bar_spacing = 1
+lower_cutoff_freq = 50
+higher_cutoff_freq = 12000
+
+[input]
+method = pipewire
+source = auto
+
+[output]
+method = noncurses
+orientation = bottom
+channels = stereo
+mono_option = average
+
+[color]
+gradient = 1
+gradient_count = 6
+gradient_color_1 = '#005577'
+gradient_color_2 = '#0088aa'
+gradient_color_3 = '#00ccaa'
+gradient_color_4 = '#00ff88'
+gradient_color_5 = '#38ef7d'
+gradient_color_6 = '#ffffff'
+
+[smoothing]
+noise_reduction = 60
+monstercat = 1
+waves = 1
+gravity = 120
+EOF
+    fi
+}
+
+start_speakers() {
+    local WITH_CAVA=0
+    for arg in "$@"; do
+        if [ "$arg" = "--cava" ] || [ "$arg" = "-c" ] || [ "$arg" = "cava" ]; then
+            WITH_CAVA=1
+        fi
+    done
+
+    echo -e "${CYAN}${BOLD}"
+    echo "======================================================================"
+    echo "       MY TABLET SERVER - DUAL STEREO HOPARLÖR & CAVA SİSTEMİ         "
+    echo "======================================================================"
+    echo -e "${NC}"
+
+    ensure_snapserver_bin
+    ensure_config
+
+    local PC_IP=$(get_pc_ip)
+
+    # 1. Stop old instances
+    if pgrep -f "snapserver.*snapserver.conf" >/dev/null 2>&1; then
+        log_warn "Eski Snapserver sonlandırılıyor..."
+        pkill -f "snapserver.*snapserver.conf" 2>/dev/null || true
+        sleep 1
+    fi
+
+    # 2. Check Firewall (UFW)
+    if which ufw >/dev/null 2>&1 && systemctl is-active ufw 2>/dev/null | grep -q "active"; then
+        log_info "UFW Güvenlik Duvarı tespit edildi."
+        log_warn "Eğer Wi-Fi üzerinden bağlantı kurulamıyorsa terminalde şu komutu verin:"
+        echo -e "   ${YELLOW}sudo ufw allow 1704/tcp && sudo ufw allow 1780/tcp${NC}"
+    fi
+
+    # 3. Start Snapserver in background
+    log_info "Snapserver ana akış sunucusu başlatılıyor..."
+    export LD_LIBRARY_PATH="$DIR/lib:$LD_LIBRARY_PATH"
+    setsid "$SNAP_BIN" -c "$CONF_FILE" > "$LOG_FILE" 2>&1 &
+    local SERVER_PID=$!
+    sleep 1
+
+    if ! pgrep -f "snapserver.*snapserver.conf" >/dev/null 2>&1; then
+        log_err "Snapserver başlatılamadı! Log inceleniyor:"
+        cat "$LOG_FILE" | tail -n 15
+        exit 1
+    fi
+    log_ok "Snapserver aktif (Port: 1704, Web UI: http://$PC_IP:1780)"
+
+    # 4. Connect Samsung Galaxy Tab 3 (Sol Kanal / Left Channel)
+    log_info "Samsung Galaxy Tab 3 (Sol Kanal) hazırlanıyor..."
+    # Reverse SSH tunnel ensures 100% connectivity bypassing firewalls
+    ssh -o ExitOnForwardFailure=no -o ConnectTimeout=2 -f -N -R 1704:127.0.0.1:1704 my-tablet-server 2>/dev/null || true
+
+    # Start snapclient on Samsung in chroot piping directly to Dalvik AudioBridge (4711)
+    ssh my-tablet-server "pkill -f snapclient 2>/dev/null || true"
+    ssh my-tablet-server "nohup sh -c 'snapclient --player file:filename=stdout tcp://127.0.0.1:1704 2>/dev/null | nc 127.0.0.1 4711 >/dev/null 2>&1' >/dev/null 2>&1 &" 2>/dev/null || true
+    log_ok "Samsung Tab 3 (Sol Hoparlör) ses köprüsüne bağlandı."
+
+    # 5. Connect Vestel Tablet (Sağ Kanal / Right Channel)
+    log_info "Vestel V Tab 7 Lite II (Sağ Kanal) kontrol ediliyor..."
+    local VESTEL_DEV=$(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1)
+    if [ -n "$VESTEL_DEV" ]; then
+        # Launch Snapcast Android App on Vestel
+        adb -s "$VESTEL_DEV" shell "am start -n de.badaix.snapcast/.MainActivity" >/dev/null 2>&1 || true
+        log_ok "Vestel Tab 7 (Sağ Hoparlör) Snapcast istemcisi açıldı."
+    else
+        log_info "Vestel tablet USB üzerinden algılanmadı, Wi-Fi üzerinden Snapcast uygulamasından bağlanabilirsiniz."
+    fi
+
+    echo ""
+    echo -e "${GREEN}${BOLD}======================================================================${NC}"
+    echo -e "${GREEN}${BOLD}     ✓ HARİCİ STEREO HOPARLÖR MODU BAŞARIYLA BAŞLATILDI!              ${NC}"
+    echo -e "${GREEN}${BOLD}======================================================================${NC}"
+    echo -e "  🔊 ${BOLD}Sol Hoparlör (Left):${NC}  Samsung Galaxy Tab 3 (Otomatik Aktif)"
+    echo -e "  🔊 ${BOLD}Sağ Hoparlör (Right):${NC} Vestel V Tab 7 Lite II"
+    echo -e "  🌐 ${BOLD}Web Kontrol Paneli:${NC}   ${CYAN}http://localhost:1780${NC} (veya http://$PC_IP:1780)"
+    echo -e "  🎛️  ${BOLD}Ses/Kanal Ayarı:${NC}      Web arayüzünden ses seviyelerini ve sol/sağ dengesini anlık yönetebilirsiniz."
+    echo ""
+
+    if [ "$WITH_CAVA" -eq 1 ]; then
+        log_info "Frutiger Aero CAVA Müzik Spektrumu başlatılıyor..."
+        sleep 1
+        cava_visualizer
+    else
+        echo -e "  💡 ${CYAN}Görsel Ekolayzır için:${NC} ${BOLD}my-tablet-server speakers cava${NC}"
+        echo -e "  ⏹️  ${RED}Durdurmak için:${NC}        ${BOLD}my-tablet-server speakers stop${NC}"
+    fi
+}
+
+stop_speakers() {
+    log_info "Stereo hoparlör modu ve servisleri kapatılıyor..."
+
+    # 1. Kill PC Snapserver & pw-record
+    pkill -f "snapserver.*snapserver.conf" 2>/dev/null || true
+    pkill -f "pw-record.*snapfifo" 2>/dev/null || true
+
+    # 2. Stop Samsung Snapclient
+    ssh -o ConnectTimeout=2 my-tablet-server "pkill -f snapclient 2>/dev/null || true" 2>/dev/null || true
+
+    # 3. Stop Vestel Snapcast app
+    local VESTEL_DEV=$(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1)
+    if [ -n "$VESTEL_DEV" ]; then
+        adb -s "$VESTEL_DEV" shell "am force-stop de.badaix.snapcast" 2>/dev/null || true
+    fi
+
+    # 4. Kill CAVA
+    pkill -f "cava -p.*cava.conf" 2>/dev/null || true
+
+    log_ok "Tüm stereo hoparlör servisleri ve istemcileri durduruldu."
+}
+
+cava_visualizer() {
+    ensure_config
+    if which cava >/dev/null 2>&1; then
+        echo -e "${CYAN}CAVA Frutiger Aero Müzik Spektrumu açılıyor... (Çıkmak için 'q' tuşuna basın)${NC}"
+        cava -p "$CAVA_CONF"
+    else
+        log_err "CAVA kurulu değil! Kurmak için: sudo pacman -S cava"
+    fi
+}
+
+status_speakers() {
+    echo -e "${CYAN}${BOLD}=== STEREO HOPARLÖR & CAVA DURUM RAPORU ===${NC}"
+    local PC_IP=$(get_pc_ip)
+
+    if pgrep -f "snapserver.*snapserver.conf" >/dev/null 2>&1; then
+        local PID=$(pgrep -f "snapserver.*snapserver.conf" | head -n1)
+        echo -e "  Snapserver Durumu:   ${GREEN}ÇALIŞIYOR (PID: $PID)${NC}"
+        echo -e "  Web Kontrol Portu:   ${CYAN}http://$PC_IP:1780${NC}"
+        echo -e "  Ses Akış Portu:      1704 (FLAC / 48kHz / 16-bit)"
+    else
+        echo -e "  Snapserver Durumu:   ${RED}KAPALI${NC}"
+    fi
+
+    # Samsung status
+    if ssh -o ConnectTimeout=2 my-tablet-server "pgrep -f snapclient >/dev/null 2>&1" 2>/dev/null; then
+        echo -e "  Samsung Tab 3 (Sol): ${GREEN}BAĞLI & ÇALIŞIYOR ✓${NC}"
+    else
+        echo -e "  Samsung Tab 3 (Sol): ${YELLOW}Bağlı Değil / Beklemede${NC}"
+    fi
+
+    # Vestel status
+    local VESTEL_DEV=$(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1)
+    if [ -n "$VESTEL_DEV" ]; then
+        echo -e "  Vestel Tab 7 (Sağ):  ${GREEN}USB'den Bağlı (ADB: $VESTEL_DEV) ✓${NC}"
+    else
+        echo -e "  Vestel Tab 7 (Sağ):  ${YELLOW}USB'de Değil (Wi-Fi İstemcisi)${NC}"
+    fi
+
+    echo ""
+}
+
+show_config_help() {
+    cat << EOF
+======================================================================
+      STEREO HOPARLÖR & CAVA AYARLARI KULLANIM KILAVUZU
+======================================================================
+Yapılandırma Dosyaları:
+  1. Ses Sunucusu Ayarları : $CONF_FILE
+  2. Ekolayzır (CAVA)      : $CAVA_CONF
+
+Sık Kullanılan Ayarlar:
+  - Gecikme (Buffer / Latency):
+    '$CONF_FILE' içerisindeki 'buffer = 150' değerini:
+      * Oyun ve Filmler için   : buffer = 50 (Çok düşük gecikme)
+      * Kararlı Wi-Fi Müzik için: buffer = 150 (Öntanımlı)
+
+  - Ses Formatı ve Sıkıştırma:
+    'codec = flac' (Kayıpsız / Yüksek Kalite)
+    'codec = pcm'  (Sıfır CPU yükü / Ham PCM)
+    'codec = opus' (Zayıf Wi-Fi ağları için ultra hafif)
+
+  - Sol / Sağ Kanal Dengesi & Ses:
+    Web tarayıcınızdan 'http://localhost:1780' adresine girerek
+    her iki tabletin sesini, sol/sağ dengesini ve mikserini canlı
+    olarak değiştirebilirsiniz.
+
+  - CAVA Görselleştirici Renk & Şekil Ayarları:
+    '$CAVA_CONF' içerisinden renkleri (gradient_color), bar genişliğini
+    (bar_width) ve hassasiyeti (gravity / noise_reduction) değiştirebilirsiniz.
+======================================================================
+EOF
+}
+
+case "${1:-status}" in
+    start|on|up)
+        shift
+        start_speakers "$@"
+        ;;
+    stop|off|down)
+        stop_speakers
+        ;;
+    restart)
+        stop_speakers
+        sleep 1
+        start_speakers "${@:2}"
+        ;;
+    cava|vis|visualizer)
+        cava_visualizer
+        ;;
+    status)
+        status_speakers
+        ;;
+    config|settings|help)
+        show_config_help
+        ;;
+    *)
+        echo "Kullanım: $0 {start [--cava] | stop | restart | cava | status | config}"
+        exit 1
+        ;;
+esac

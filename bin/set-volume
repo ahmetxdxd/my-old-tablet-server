@@ -1,0 +1,19 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - Media Volume Control
+# ==============================================================================
+
+PERCENT="$1"
+
+if [ -z "$PERCENT" ]; then
+    echo "Usage: set-volume <0-100>"
+    echo "Example: set-volume 80"
+    exit 1
+fi
+
+LEVEL=$(( (PERCENT * 15) / 100 ))
+if [ "$LEVEL" -gt 15 ]; then LEVEL=15; fi
+if [ "$LEVEL" -lt 0 ]; then LEVEL=0; fi
+
+/system/bin/media volume --stream 3 --set "$LEVEL" 2>/dev/null || true
+echo "[Volume] Set to $PERCENT% (Hardware level: $LEVEL/15)."

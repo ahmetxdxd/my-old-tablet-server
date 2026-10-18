@@ -1,0 +1,58 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - Video Streamer & Anime/Film Player (VLC Hardware Accel)
+# ==============================================================================
+# Plays YouTube, Animecix, or any video URL directly via VLC hardware decoder.
+# Commands:
+#   watch <url or search query>   : Stream video to VLC Player
+#   watch stop                    : Close VLC player & stop stream
+# ==============================================================================
+
+QUERY="$*"
+
+if [ -z "$QUERY" ]; then
+    echo "======================================================"
+    echo "         MY TABLET VIDEO STREAMER (VLC)               "
+    echo "======================================================"
+    echo "Usage:"
+    echo "  watch <url or search query>"
+    echo "  watch stop"
+    echo ""
+    echo "Examples:"
+    echo "  watch https://animecix.net/titles/.../bolum-1"
+    echo "  watch 'Bleach trailer 1080p'"
+    echo "  watch stop"
+    echo "======================================================"
+    exit 1
+fi
+
+if [ "$QUERY" = "stop" ]; then
+    /system/bin/am force-stop org.videolan.vlc 2>/dev/null || true
+    echo "[Video] Playback stopped. VLC closed."
+    exit 0
+fi
+
+echo "[Video] Resolving media stream for: $QUERY"
+
+TARGET="$QUERY"
+if [[ ! "$QUERY" =~ ^https?:// ]] && [[ ! "$QUERY" =~ ^ytsearch ]]; then
+    TARGET="ytsearch1:$QUERY"
+fi
+
+# Extract direct stream URL (prioritize single stream mp4/m3u8, fallback to b/ba)
+STREAM_URL=$(yt-dlp -4 --js-runtimes quickjs -g -f "best[ext=mp4]/b/best" "$TARGET" 2>/dev/null | head -n 1)
+
+if [ -z "$STREAM_URL" ]; then
+    STREAM_URL=$(yt-dlp -4 --js-runtimes quickjs -g "$TARGET" 2>/dev/null | head -n 1)
+fi
+
+if [ -z "$STREAM_URL" ]; then
+    echo "[ERROR] Stream resolution failed. Please check URL or network connectivity."
+    exit 1
+fi
+
+echo "[Video] Launching hardware accelerated VLC playback..."
+/system/bin/am start -a android.intent.action.VIEW -d "$STREAM_URL" -t "video/*" -n org.videolan.vlc/.StartActivity >/dev/null 2>&1
+
+echo "[Video] Now playing on tablet screen via VLC!"
+echo "[Video] Run 'watch stop' to close the player."

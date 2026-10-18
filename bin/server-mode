@@ -1,0 +1,297 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - 3-Way Mode & Resource Manager
+# ==============================================================================
+# 1. Linux Mode   : Pure headless server. Android GUI stopped, screen OFF,
+#                   maximum RAM (~700MB+) and CPU for Linux daemons.
+# 2. Android Mode : Pure Android tablet. Linux background services (Hermes,
+#                   Cron, Tmux) stopped. Maximum RAM & battery for Android apps.
+# 3. Hybrid Mode  : Dual mode. Android TouchWiz UI is visible (clock, time,
+#                   widgets) while Linux background services (Hermes timers,
+#                   Cron, SSH) continue running seamlessly in background.
+# ==============================================================================
+
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
+
+ACTION="${1:-status}"
+BRIGHT_FILE="/sys/class/backlight/panel/brightness"
+STATE_FILE="/var/run/tablet_mode"
+[ -d "/var/run" ] || mkdir -p /var/run 2>/dev/null || true
+
+# List of heavy Android packages to stop when freeing RAM
+ANDROID_APPS=(
+    "acr.browser.lightning"
+    "free.rm.skytube.extra"
+    "org.videolan.vlc"
+    "com.android.chrome"
+    "com.dropbox.android"
+    "com.google.android.talk"
+    "deezer.android.app"
+    "com.sec.android.app.music"
+    "com.google.android.apps.docs"
+    "com.sec.android.app.samsungapps"
+    "com.fingersoft.hillclimb"
+    "com.mojang.minecraftpe"
+    "com.rovio.angrybirdsgo"
+    "com.kiloo.subwaysurf"
+    "com.dotgears.flappybird"
+    "com.rovio.angrybirds"
+)
+
+# Helper: stop all background Android apps including Launcher
+freeze_all_android() {
+    /system/bin/am force-stop com.sec.android.app.launcher 2>/dev/null || true
+    for pkg in "${ANDROID_APPS[@]}"; do
+        /system/bin/am force-stop "$pkg" 2>/dev/null || true
+    done
+    /system/bin/am kill-all 2>/dev/null || true
+}
+
+# Helper: stop only non-essential Android apps, keeping Launcher & UI active
+freeze_heavy_android_apps() {
+    for pkg in "${ANDROID_APPS[@]}"; do
+        /system/bin/am force-stop "$pkg" 2>/dev/null || true
+    done
+}
+
+# Helper: stop heavy Linux chroot background daemons
+freeze_linux_services() {
+    # 1. Stop Tmux console & sessions
+    tmux kill-server 2>/dev/null || true
+    pkill -9 -f tmux 2>/dev/null || true
+    killall tmux 2>/dev/null || true
+
+    # 2. Stop Jackpal Terminal
+    /system/bin/am force-stop jackpal.androidterm 2>/dev/null || true
+    pkill -9 -f jackpal.androidterm 2>/dev/null || true
+
+    # 3. Stop Cron, Hermes, Python agents & audio players
+    pkill -9 -f hermes 2>/dev/null || true
+    killall hermes 2>/dev/null || true
+    pkill -9 -f crond 2>/dev/null || true
+    killall crond 2>/dev/null || true
+    pkill -9 -f python3 2>/dev/null || true
+    killall python3 2>/dev/null || true
+    pkill -9 -f mpv 2>/dev/null || true
+    pkill -9 -f yt-dlp 2>/dev/null || true
+    pkill -9 -f quickjs 2>/dev/null || true
+}
+
+# Helper: start core Linux services (SSH, Crond, Hermes Gateway)
+start_linux_services() {
+    mkdir -p /var/run /var/empty /run 2>/dev/null || true
+
+    # 1. Ensure OpenSSH is active
+    if ! ps -ef | grep '[s]shd' >/dev/null 2>&1; then
+        if [ -x /usr/sbin/sshd ]; then
+            /usr/sbin/sshd 2>/dev/null || true
+        elif [ -f /data/local/linux/lib/ld-musl-armhf.so.1 ]; then
+            /data/local/linux/lib/ld-musl-armhf.so.1 /data/local/linux/bin/busybox chroot /data/local/linux /usr/sbin/sshd 2>/dev/null || true
+        fi
+    fi
+
+    # 2. Ensure Cron daemon is active
+    if ! ps -ef | grep '[c]rond' >/dev/null 2>&1; then
+        rm -f /var/run/crond.pid 2>/dev/null || true
+        if [ -x /usr/sbin/crond ]; then
+            /usr/sbin/crond 2>/dev/null || true
+        elif [ -f /data/local/linux/lib/ld-musl-armhf.so.1 ]; then
+            /data/local/linux/lib/ld-musl-armhf.so.1 /data/local/linux/bin/busybox chroot /data/local/linux /usr/sbin/crond 2>/dev/null || true
+        fi
+    fi
+
+    # 3. Ensure Hermes Gateway is running for Hermes timers & cron jobs
+    if [ -f /usr/bin/hermes ] || [ -f /data/local/linux/usr/bin/hermes ]; then
+        if ! ps -ef | grep '[h]ermes gateway' >/dev/null 2>&1; then
+            mkdir -p /var/log /data/local/linux/var/log 2>/dev/null || true
+            if [ -x /usr/bin/hermes ]; then
+                nohup /usr/bin/hermes gateway run >/var/log/hermes-gateway.log 2>&1 &
+            elif [ -f /data/local/linux/lib/ld-musl-armhf.so.1 ]; then
+                /data/local/linux/lib/ld-musl-armhf.so.1 /data/local/linux/bin/busybox chroot /data/local/linux /bin/sh -c "
+                    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+                    export HOME=/root
+                    export USER=root
+                    nohup /usr/bin/hermes gateway run >/var/log/hermes-gateway.log 2>&1 &
+                " 2>/dev/null || true
+            fi
+        fi
+    fi
+}
+
+set_brightness() {
+    echo "$1" > "$BRIGHT_FILE" 2>/dev/null || /system/bin/sh -c "echo $1 > $BRIGHT_FILE 2>/dev/null || true" 2>/dev/null || true
+}
+
+get_brightness() {
+    cat "$BRIGHT_FILE" 2>/dev/null || /system/bin/sh -c "cat $BRIGHT_FILE 2>/dev/null || echo 0" 2>/dev/null || echo "0"
+}
+
+case "$ACTION" in
+    linux|server|headless|enable|on)
+        echo "======================================================"
+        echo "  [1/3] Switching to PURE LINUX SERVER MODE...        "
+        echo "======================================================"
+        # 1. Turn off display backlight (save power & thermal)
+        set_brightness 0
+
+        # 2. Freeze Android Launcher and apps to eliminate idle CPU & RAM usage
+        freeze_all_android
+
+        # 3. Start Linux background daemons (SSH, Cron, Hermes Gateway)
+        start_linux_services
+
+        # 4. Flush filesystem cache
+        sync
+        echo 3 > /proc/sys/vm/drop_caches 2>/dev/null
+
+        # 5. Save state
+        echo "linux" > "$STATE_FILE" 2>/dev/null || true
+        echo "linux" > /data/local/linux/var/run/tablet_mode 2>/dev/null || true
+
+        FREE_RAM=$(free -m 2>/dev/null | awk '/Mem:/ {print $4}' || echo "N/A")
+        echo "[Server-Mode] Pure LINUX SERVER MODE is ACTIVE."
+        echo "[Server-Mode] Screen Backlight : OFF (0/255)"
+        echo "[Server-Mode] Android GUI      : STOPPED (0% display overhead)"
+        echo "[Server-Mode] Linux Daemons    : SSH, Crond, Hermes Gateway ACTIVE"
+        echo "[Server-Mode] Free RAM for Linux: ~${FREE_RAM} MB"
+        ;;
+
+    android|tablet|gui|normal|desktop)
+        echo "======================================================"
+        echo "  [2/3] Switching to PURE ANDROID TABLET MODE...      "
+        echo "======================================================"
+        # 1. Stop heavy Linux services so they consume ZERO RAM/CPU
+        echo "[Server-Mode] Stopping Linux background tasks (Hermes, Crond, Tmux)..."
+        freeze_linux_services
+
+        # 2. Turn on display backlight (Default 180/255)
+        set_brightness 180
+
+        # 3. Restore TouchWiz Android Launcher
+        /system/bin/am start -n com.sec.android.app.launcher/com.android.launcher2.Launcher >/dev/null 2>&1 || true
+
+        # 4. Flush memory caches to maximize RAM for Android apps
+        sync
+        echo 3 > /proc/sys/vm/drop_caches 2>/dev/null
+
+        # 5. Save state
+        echo "android" > "$STATE_FILE" 2>/dev/null || true
+        echo "android" > /data/local/linux/var/run/tablet_mode 2>/dev/null || true
+
+        FREE_RAM=$(free -m 2>/dev/null | awk '/Mem:/ {print $4}' || echo "N/A")
+        echo "[Server-Mode] Pure ANDROID TABLET MODE is ACTIVE."
+        echo "[Server-Mode] Screen Backlight : ON (180/255)"
+        echo "[Server-Mode] Android GUI      : ACTIVE (TouchWiz Launcher)"
+        echo "[Server-Mode] Linux Daemons    : STOPPED (0% CPU, 0 MB overhead)"
+        echo "[Server-Mode] Free RAM for Apps: ~${FREE_RAM} MB"
+        ;;
+
+    hybrid|hibrit|dual)
+        echo "======================================================"
+        echo "  [3/3] Switching to HYBRID DUAL MODE...              "
+        echo "======================================================"
+        # 1. Close heavy non-essential apps to prevent RAM choking, but KEEP Launcher
+        freeze_heavy_android_apps
+
+        # 2. Turn on display backlight so user sees time & clock
+        set_brightness 180
+
+        # 3. Restore/Ensure TouchWiz Android Launcher is in front
+        /system/bin/am start -n com.sec.android.app.launcher/com.android.launcher2.Launcher >/dev/null 2>&1 || true
+
+        # 4. Start/Ensure Linux background daemons (Hermes timers, Crond, SSH)
+        start_linux_services
+
+        # 5. Flush memory caches
+        sync
+        echo 3 > /proc/sys/vm/drop_caches 2>/dev/null
+
+        # 6. Save state
+        echo "hybrid" > "$STATE_FILE" 2>/dev/null || true
+        echo "hybrid" > /data/local/linux/var/run/tablet_mode 2>/dev/null || true
+
+        FREE_RAM=$(free -m 2>/dev/null | awk '/Mem:/ {print $4}' || echo "N/A")
+        echo "[Server-Mode] HYBRID DUAL MODE is ACTIVE."
+        echo "[Server-Mode] Screen Backlight : ON (180/255)"
+        echo "[Server-Mode] Android GUI      : ACTIVE (Clock, widgets & interface visible)"
+        echo "[Server-Mode] Linux Daemons    : ACTIVE in background (Hermes Timers, Cron, SSH)"
+        echo "[Server-Mode] Free RAM         : ~${FREE_RAM} MB (Balanced for Android + Linux)"
+        ;;
+
+    screen-on|tty|terminal)
+        echo "[Server-Mode] Switching to Pure Linux TTY Display Mode..."
+        freeze_all_android
+        start_linux_services
+        /system/bin/am start -n jackpal.androidterm/.Term --activity-brought-to-front >/dev/null 2>&1 || true
+        sleep 1
+        /system/bin/input keyevent 4 2>/dev/null || true
+        BRIGHTNESS="${2:-180}"
+        set_brightness "$BRIGHTNESS"
+        sync
+        echo 3 > /proc/sys/vm/drop_caches 2>/dev/null
+        FREE_RAM=$(free -m 2>/dev/null | awk '/Mem:/ {print $4}' || echo "N/A")
+        echo "[Server-Mode] Fullscreen TTY Linux console active (Screen ON: $BRIGHTNESS/255)."
+        echo "[Server-Mode] Free RAM available: ~${FREE_RAM} MB."
+        ;;
+
+    screen-off)
+        echo "[Server-Mode] Turning OFF display backlight..."
+        set_brightness 0
+        echo "[Server-Mode] Backlight is OFF (Background services continue running)."
+        ;;
+
+    status)
+        BRIGHT=$(get_brightness)
+        FREE_RAM=$(free -m 2>/dev/null | awk '/Mem:/ {print $4}' || echo "N/A")
+        TOTAL_RAM=$(free -m 2>/dev/null | awk '/Mem:/ {print $2}' || echo "N/A")
+        
+        LAUNCHER_RUNNING=$(ps -ef 2>/dev/null | grep '[c]om.sec.android.app.launcher' | wc -l || echo 0)
+        TMUX_RUNNING=$(ps -ef 2>/dev/null | grep '[t]mux' | wc -l || echo 0)
+        CRON_RUNNING=$(ps -ef 2>/dev/null | grep '[c]rond' | wc -l || echo 0)
+        HERMES_RUNNING=$(ps -ef 2>/dev/null | grep '[h]ermes' | wc -l || echo 0)
+        SSH_RUNNING=$(ps -ef 2>/dev/null | grep '[s]shd' | wc -l || echo 0)
+
+        SAVED_STATE=$(cat "$STATE_FILE" 2>/dev/null || cat /data/local/linux/var/run/tablet_mode 2>/dev/null || echo "")
+
+        echo "======================================================"
+        echo "              TABLET SERVER OPERATION MODES           "
+        echo "======================================================"
+        if [ "$BRIGHT" = "0" ]; then
+            echo "Display State  : Screen OFF (Backlight: 0/255)"
+        else
+            echo "Display State  : Screen ON (Backlight: $BRIGHT/255)"
+        fi
+
+        if [ "$SAVED_STATE" = "android" ]; then
+            echo "Active Mode    : [2. ANDROID TABLET MODE] (Linux Stopped, Max RAM for Apps)"
+        elif [ "$SAVED_STATE" = "hybrid" ]; then
+            echo "Active Mode    : [3. HYBRID DUAL MODE] (Android GUI + Linux Timers Active)"
+        elif [ "$SAVED_STATE" = "linux" ]; then
+            echo "Active Mode    : [1. LINUX SERVER MODE] (Headless, Android GUI Stopped)"
+        elif [ "$LAUNCHER_RUNNING" -gt 0 ] && ([ "$CRON_RUNNING" -gt 0 ] || [ "$HERMES_RUNNING" -gt 0 ]); then
+            echo "Active Mode    : [3. HYBRID DUAL MODE] (Android GUI + Linux Timers Active)"
+        elif [ "$LAUNCHER_RUNNING" -gt 0 ]; then
+            echo "Active Mode    : [2. ANDROID TABLET MODE] (Linux Stopped, Max RAM for Apps)"
+        else
+            echo "Active Mode    : [1. LINUX SERVER MODE] (Headless, Android GUI Stopped)"
+        fi
+
+        echo "Services State : SSH: $([ "$SSH_RUNNING" -gt 0 ] && echo "Active" || echo "Stopped") | Cron: $([ "$CRON_RUNNING" -gt 0 ] && echo "Active" || echo "Stopped") | Hermes: $([ "$HERMES_RUNNING" -gt 0 ] && echo "Active" || echo "Stopped") | Tmux: $([ "$TMUX_RUNNING" -gt 0 ] && echo "Active" || echo "Stopped")"
+        echo "Available RAM  : ${FREE_RAM} MB free of ${TOTAL_RAM} MB"
+        echo "======================================================"
+        echo "Available Modes:"
+        echo "  server-mode linux   : [1] Pure Linux Server (Headless, screen OFF, Max RAM)"
+        echo "  server-mode android : [2] Pure Android Tablet (Linux STOPPED, Max RAM for apps)"
+        echo "  server-mode hybrid  : [3] Hybrid Dual Mode (Android UI + Hermes Timers & Cron)"
+        echo "------------------------------------------------------"
+        echo "Display Controls:"
+        echo "  server-mode screen-on  [bright] : Turn screen ON (TTY / custom brightness)"
+        echo "  server-mode screen-off          : Turn screen OFF (save battery/heat)"
+        echo "======================================================"
+        ;;
+
+    *)
+        echo "Usage: server-mode [linux | android | hybrid | status | screen-on | screen-off]"
+        exit 1
+        ;;
+esac

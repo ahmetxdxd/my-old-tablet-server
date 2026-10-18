@@ -1,0 +1,37 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - Continuous Host Background Daemon
+# 1. Keeps USB ADB port forwarding active (ssh root@localhost -p 2222)
+# 2. Monitors PC Wi-Fi connection and mirrors SSID & Password to tablet
+# 3. Dynamically updates ~/.ssh/config HostName with tablet's Wi-Fi IP
+# ==============================================================================
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SYNC_SCRIPT="$DIR/sync-wifi"
+
+LAST_SSID=""
+
+while true; do
+    # Check if tablet is connected via ADB
+    DEVICE_SERIAL=$(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1 || true)
+    
+    if [ -n "$DEVICE_SERIAL" ]; then
+        # Ensure ADB port forwarding 2222 -> 22 is active
+        adb forward tcp:2222 tcp:22 2>/dev/null || true
+        
+        # Check current host Wi-Fi
+        CURRENT_CONN=$(nmcli -t -f active,type,name connection show --active 2>/dev/null | grep '^yes:802-11-wireless:' | cut -d':' -f3- | head -n1 || true)
+        
+        if [ -n "$CURRENT_CONN" ]; then
+            # If network changed or first run, run sync-wifi
+            if [ "$CURRENT_CONN" != "$LAST_SSID" ]; then
+                bash "$SYNC_SCRIPT" >/dev/null 2>&1 || true
+                LAST_SSID="$CURRENT_CONN"
+            fi
+        fi
+    else
+        LAST_SSID=""
+    fi
+    
+    sleep 5
+done

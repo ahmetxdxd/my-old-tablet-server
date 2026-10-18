@@ -1,0 +1,10 @@
+#!/bin/bash
+# ==============================================================================
+# Hermes Tablet Sunucu - Tablet Ekranındaki Canlı Tmux Konsoluna Bağlan
+# ==============================================================================
+# PC'den veya tabletten çalıştırıldığında tabletin kendi ekranında açık olan
+# canlı terminal oturumuna bağlanır. PC'den yazılanlar tablette, tabletten
+# yazılanlar PC'de anında senkronize görünür.
+# ==============================================================================
+
+exec tmux attach -t console 2>/dev/null || exec tmux new-session -s console

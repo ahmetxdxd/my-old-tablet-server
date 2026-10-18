@@ -1,0 +1,11 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - Wake Host PC (Wake-on-LAN)
+# ==============================================================================
+
+PC_MAC="${1:-b0:60:88:33:08:42}"
+BROADCAST="${2:-192.168.1.255}"
+
+echo "[Wake-on-LAN] Sending magic packet -> MAC: $PC_MAC (Broadcast: $BROADCAST)..."
+wakeonlan -i "$BROADCAST" "$PC_MAC"
+echo "[Wake-on-LAN] Sent! Checking PC status (pc-status)..."

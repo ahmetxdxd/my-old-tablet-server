@@ -1,0 +1,49 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - Comprehensive System Status Report
+# ==============================================================================
+
+echo "======================================================================"
+echo "          MY TABLET SERVER (Samsung SM-T210 / Marvell PXA986)         "
+echo "======================================================================"
+
+DISTRO=$(cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '"')
+echo "Operating System : ${DISTRO:-Alpine Linux ARMv7}"
+echo "Linux Kernel     : $(uname -sr)"
+echo "System Uptime    : $(uptime -p 2>/dev/null || uptime)"
+
+IP_WLAN=$(ip -4 addr show wlan0 2>/dev/null | awk '/inet / {print $2}' | head -n1)
+echo "Wi-Fi IP Address : ${IP_WLAN:-Disconnected}"
+
+CPU_TEMP_RAW=$(cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null || echo "0")
+if [ "$CPU_TEMP_RAW" -gt 1000 ]; then
+    CPU_TEMP=$(( CPU_TEMP_RAW / 1000 ))
+else
+    CPU_TEMP="$CPU_TEMP_RAW"
+fi
+CPU_FREQ=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null || echo "0")
+CPU_FREQ_MHZ=$(( CPU_FREQ / 1000 ))
+
+echo "CPU Temperature  : ${CPU_TEMP}°C"
+echo "CPU Frequency    : ${CPU_FREQ_MHZ} MHz"
+
+if [ -f /sys/class/power_supply/battery/capacity ]; then
+    BAT_CAP=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null)
+    BAT_STAT=$(cat /sys/class/power_supply/battery/status 2>/dev/null)
+    echo "Battery Level    : %${BAT_CAP} (${BAT_STAT})"
+fi
+
+BRIGHT=$(cat /sys/class/backlight/panel/brightness 2>/dev/null || echo "0")
+if [ "$BRIGHT" = "0" ]; then
+    echo "Display State    : OFF (Backlight: 0)"
+else
+    echo "Display State    : ON (Brightness: $BRIGHT/255)"
+fi
+
+echo "----------------------------------------------------------------------"
+echo "Memory Usage (RAM):"
+free -m
+echo "----------------------------------------------------------------------"
+echo "Disk Usage (/data):"
+df -h /data 2>/dev/null || df -h /
+echo "======================================================================"

@@ -1,0 +1,289 @@
+#!/bin/bash
+# ==============================================================================
+# MY TABLET SERVER - Modular Application & Suite Auto-Downloader
+# ==============================================================================
+# Installs pre-configured and hardware-optimized packages on top of the minimal
+# Alpine Linux server on Android 4.4 KitKat.
+# Works seamlessly both from Host PC (via ADB) and directly inside tablet terminal!
+# ==============================================================================
+
+set -e
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd || echo "")"
+
+GREEN='\033[01;32m'
+BLUE='\033[01;34m'
+YELLOW='\033[01;33m'
+RED='\033[01;31m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+log_info() { echo -e "${BLUE}[INFO] $1${NC}"; }
+log_ok() { echo -e "${GREEN}✓ $1${NC}"; }
+log_warn() { echo -e "${YELLOW}[WARN] $1${NC}"; }
+log_err() { echo -e "${RED}[ERROR] $1${NC}"; }
+
+# Detect environment: Local Tablet Chroot vs Host PC
+IS_LOCAL=0
+if [ -f "/etc/alpine-release" ] || [ -e "/system/bin/sh" ] || ! command -v adb >/dev/null 2>&1; then
+    IS_LOCAL=1
+fi
+
+# Execute command inside Linux environment
+exec_linux() {
+    if [ "$IS_LOCAL" -eq 1 ]; then
+        sh -c "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; $1"
+    else
+        adb shell "su -c '/data/local/linux/lib/ld-musl-armhf.so.1 /data/local/linux/bin/busybox chroot /data/local/linux /bin/sh -c \"export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; $1\"'"
+    fi
+}
+
+# Install an APK on the Android layer
+install_android_apk() {
+    local URL="$1"
+    local LOCAL_FILE="$2"
+    local APK_NAME="$(basename "$LOCAL_FILE")"
+
+    if [ "$IS_LOCAL" -eq 1 ]; then
+        log_info "Downloading $APK_NAME directly on tablet..."
+        mkdir -p /sdcard/download 2>/dev/null || true
+        curl -L "$URL" -o "/sdcard/download/$APK_NAME"
+        log_info "Installing $APK_NAME via Android package manager..."
+        export ANDROID_ROOT=/system
+        export ANDROID_DATA=/data
+        export BOOTCLASSPATH=/system/framework/core.jar:/system/framework/conscrypt.jar:/system/framework/core-junit.jar:/system/framework/bouncycastle.jar:/system/framework/ext.jar:/system/framework/framework.jar:/system/framework/framework2.jar:/system/framework/twframework.jar:/system/framework/android.policy.jar:/system/framework/services.jar:/system/framework/apache-xml.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/mms-common.jar:/system/framework/webviewchromium.jar:/system/framework/sec_edm.jar:/system/framework/com.android.location.provider.jar:/system/framework/input.jar:/system/framework/okhttp.jar
+        export LD_LIBRARY_PATH=/vendor/lib:/system/lib:/lib
+        export PATH=/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin:$PATH
+        /system/bin/pm install -r "/sdcard/download/$APK_NAME" >/dev/null 2>&1 || true
+        rm -f "/sdcard/download/$APK_NAME" 2>/dev/null || true
+    else
+        if [ ! -f "$LOCAL_FILE" ]; then
+            log_info "Downloading $APK_NAME on host..."
+            mkdir -p "$(dirname "$LOCAL_FILE")"
+            curl -L "$URL" -o "$LOCAL_FILE"
+        fi
+        log_info "Installing $APK_NAME via ADB..."
+        adb install -r "$LOCAL_FILE" >/dev/null 2>&1 || true
+    fi
+}
+
+# 1. Install Media & Audio Suite (YouTube, Radio, AudioBridge, QuickJS)
+install_audio_suite() {
+    echo -e "\n${YELLOW}--> Installing Audio & YouTube Player Suite...${NC}"
+    log_info "Installing mpv, ffmpeg, alsa-utils, quickjs, snapcast-client in Linux..."
+    exec_linux "apk add --no-cache mpv ffmpeg alsa-utils quickjs snapcast-client 2>/dev/null || true"
+
+    log_info "Installing and optimizing yt-dlp..."
+    exec_linux "pip3 install --break-system-packages --upgrade yt-dlp 2>/dev/null || apk add --no-cache yt-dlp || true"
+
+    if [ "$IS_LOCAL" -eq 0 ]; then
+        log_info "Deploying Dalvik AudioBridge & audio scripts from host..."
+        adb push "$DIR/packages/audio_bridge.jar" /sdcard/audio_bridge.jar >/dev/null 2>&1 || true
+        adb shell "su -c 'cp /sdcard/audio_bridge.jar /data/local/audio_bridge.jar && cp /sdcard/audio_bridge.jar /data/local/linux/audio_bridge.jar && rm -f /sdcard/audio_bridge.jar'" 2>/dev/null || true
+        adb push "$DIR/bin/yt" /sdcard/yt >/dev/null 2>&1 || true
+        adb push "$DIR/bin/radio" /sdcard/radio >/dev/null 2>&1 || true
+        adb push "$DIR/bin/play-sound" /sdcard/play-sound >/dev/null 2>&1 || true
+        adb shell "su -c 'cp /sdcard/yt /sdcard/radio /sdcard/play-sound /data/local/linux/usr/local/bin/ && chmod 755 /data/local/linux/usr/local/bin/* && rm -f /sdcard/yt /sdcard/radio /sdcard/play-sound'" 2>/dev/null || true
+    fi
+
+    log_ok "Audio & YouTube suite successfully installed!"
+}
+
+# 2. Install Video Streaming Bridge (VLC Player APK + watch CLI)
+install_video_suite() {
+    echo -e "\n${YELLOW}--> Installing Video Streaming Bridge (VLC & watch CLI)...${NC}"
+    local VLC_URL="https://archive.videolan.org/vlc-android/2.0.6/VLC-Android-2.0.6-ARMv7.apk"
+    local VLC_LOCAL="$DIR/packages/browsers/vlc.apk"
+
+    install_android_apk "$VLC_URL" "$VLC_LOCAL"
+
+    if [ "$IS_LOCAL" -eq 0 ]; then
+        log_info "Deploying 'watch' CLI script..."
+        adb push "$DIR/bin/watch" /sdcard/watch >/dev/null 2>&1 || true
+        adb shell "su -c 'cp /sdcard/watch /data/local/linux/usr/local/bin/watch && chmod 755 /data/local/linux/usr/local/bin/watch && rm -f /sdcard/watch'" 2>/dev/null || true
+    fi
+
+    # Ensure /system is bind-mounted for launching VLC via 'am'
+    if [ "$IS_LOCAL" -eq 1 ]; then
+        [ -e /system/bin/sh ] || mount -o bind /system /system 2>/dev/null || true
+    else
+        adb shell "su -c 'mount -o bind /system /data/local/linux/system 2>/dev/null || true'"
+    fi
+
+    log_ok "Video streaming bridge and VLC hardware player installed!"
+}
+
+# 3. Install Lightweight Web Browsers & YouTube Client
+install_browsers() {
+    echo -e "\n${YELLOW}--> Installing Lightweight Web Browsers, Anime & YouTube Client...${NC}"
+    local LIGHTNING_URL="https://f-droid.org/archive/acr.browser.lightning_90.apk"
+    local LIGHTNING_LOCAL="$DIR/packages/browsers/lightning.apk"
+    local SKYTUBE_URL="https://github.com/SkyTubeTeam/SkyTube/releases/download/v2.999/SkyTube-Extra-2.999.apk"
+    local SKYTUBE_LOCAL="$DIR/packages/browsers/skytube.apk"
+    local ANIMEDLR_URL="https://github.com/cylonu87/AnimeDLR/releases/download/145/AnimeDLR-7.0.0-full-release.apk"
+    local ANIMEDLR_LOCAL="$DIR/packages/browsers/animedlr.apk"
+
+    log_info "Setting up Lightning Browser (2.2 MB, built-in AdBlock)..."
+    install_android_apk "$LIGHTNING_URL" "$LIGHTNING_LOCAL"
+
+    log_info "Setting up SkyTube Extra (modern YouTube client for KitKat with video playback)..."
+    install_android_apk "$SKYTUBE_URL" "$SKYTUBE_LOCAL"
+
+    log_info "Setting up AnimeDLR (ad-free anime streaming client for KitKat)..."
+    install_android_apk "$ANIMEDLR_URL" "$ANIMEDLR_LOCAL"
+
+    if [ "$IS_LOCAL" -eq 0 ]; then
+        log_info "Deploying 'anime' CLI tool..."
+        adb push "$DIR/bin/anime" /sdcard/anime >/dev/null 2>&1 || true
+        adb shell "su -c 'cp /sdcard/anime /data/local/linux/usr/local/bin/anime && chmod 755 /data/local/linux/usr/local/bin/anime && rm -f /sdcard/anime'" 2>/dev/null || true
+    fi
+
+    log_ok "Web Browsers, Anime & YouTube Suite successfully installed!"
+}
+
+# 4. Install AI Agents (Nous Hermes & Google Antigravity CLI Bridge)
+install_ai_agents() {
+    echo -e "\n${YELLOW}--> Installing AI Agents (Nous Hermes & Google Antigravity CLI)...${NC}"
+    log_info "Installing dependencies (build-base, python3-dev, libffi-dev)..."
+    exec_linux "apk add --no-cache build-base python3-dev libffi-dev py3-cffi py3-cryptography 2>/dev/null || true"
+
+    if [ "$IS_LOCAL" -eq 0 ] && [ -d "$DIR/packages/wheels" ] && [ "$(ls -A "$DIR/packages/wheels" 2>/dev/null)" ]; then
+        adb push "$DIR/packages/wheels/." /data/local/tmp/packages/wheels/ >/dev/null 2>&1 || true
+        exec_linux "pip3 install --break-system-packages /data/local/tmp/packages/wheels/*.whl 2>/dev/null || true"
+    fi
+
+    log_info "Installing Nous Hermes Agent CLI..."
+    exec_linux "pip3 install --break-system-packages hermes-agent 2>/dev/null || true"
+
+    if [ "$IS_LOCAL" -eq 0 ]; then
+        log_info "Deploying Antigravity CLI smart bridge ('agy' and 'antigravity')..."
+        adb push "$DIR/bin/agy" /sdcard/agy >/dev/null 2>&1 || true
+        adb shell "su -c 'cp /sdcard/agy /data/local/linux/usr/local/bin/agy && ln -sf agy /data/local/linux/usr/local/bin/antigravity && chmod 755 /data/local/linux/usr/local/bin/agy && rm -f /sdcard/agy'" 2>/dev/null || true
+    fi
+
+    log_ok "AI Agents (Hermes + Antigravity CLI) installed!"
+}
+
+# 5. Install CCTV Surveillance & Security Camera System
+install_cctv() {
+    echo -e "\n${YELLOW}--> Installing CCTV Security Camera System (V4L2 H.264 Encoder)...${NC}"
+    log_info "Ensuring ffmpeg is installed in Linux..."
+    exec_linux "apk add --no-cache ffmpeg 2>/dev/null || true"
+
+    if [ "$IS_LOCAL" -eq 0 ]; then
+        log_info "Deploying 'cctv' and 'security-camera' CLI tools..."
+        adb push "$DIR/bin/cctv" /sdcard/cctv >/dev/null 2>&1 || true
+        adb shell "su -c 'cp /sdcard/cctv /data/local/linux/usr/local/bin/cctv && /data/local/linux/lib/ld-musl-armhf.so.1 /data/local/linux/bin/busybox ln -sf /usr/local/bin/cctv /data/local/linux/usr/local/bin/security-camera && chmod 755 /data/local/linux/usr/local/bin/cctv && rm -f /sdcard/cctv'" 2>/dev/null || true
+    fi
+
+    log_ok "CCTV Security Camera tool ('cctv' / 'security-camera') successfully installed!"
+}
+
+# 6. Install Retro Games & Nostalgia Store
+install_retro_store() {
+    echo -e "\n${YELLOW}--> Setting up Retro & Nostalgia Classic Games Store...${NC}"
+    if [ "$IS_LOCAL" -eq 0 ]; then
+        log_info "Deploying 'retro-store' CLI script to tablet..."
+        adb push "$DIR/bin/retro-store" /sdcard/retro-store >/dev/null 2>&1 || true
+        adb shell "su -c 'cp /sdcard/retro-store /data/local/linux/usr/local/bin/retro-store && chmod 755 /data/local/linux/usr/local/bin/retro-store && rm -f /sdcard/retro-store'" 2>/dev/null || true
+    fi
+
+    log_ok "Retro Games Store script ('retro-store') ready!"
+    echo -e "You can install classic games (Flappy Bird, Angry Birds, GBA/SNES) anytime by running: ${YELLOW}retro-store${NC}"
+}
+
+# Interactive Menu
+show_menu() {
+    clear 2>/dev/null || true
+    echo -e "${BLUE}${BOLD}"
+    echo "======================================================================"
+    echo "         MY TABLET SERVER - APPLICATION AUTO-DOWNLOADER              "
+    echo "======================================================================"
+    echo -e "${NC}"
+    if [ "$IS_LOCAL" -eq 1 ]; then
+        echo -e " Running directly on tablet: ${GREEN}Local Linux Mode${NC}"
+    else
+        echo -e " Running from Host PC: ${GREEN}ADB Remote Mode${NC}"
+    fi
+    echo ""
+    echo -e "Choose an option to install pre-configured and optimized packages:"
+    echo ""
+    echo -e "  ${GREEN}${BOLD}1)${NC} ${BOLD}Install FULL Suite${NC} (Recommended)"
+    echo -e "     -> Audio/YT + VLC + Browsers + CCTV Camera + Retro Games + AI Suite"
+    echo ""
+    echo -e "  ${YELLOW}2)${NC} Audio & YouTube Player Suite (yt, radio, dalvik audio bridge)"
+    echo -e "  ${YELLOW}3)${NC} Video Streaming Bridge ('watch' CLI + VLC Hardware Player)"
+    echo -e "  ${YELLOW}4)${NC} Lightweight Web Browsers (Lightning Browser & SkyTube Extra YouTube)"
+    echo -e "  ${YELLOW}5)${NC} CCTV Security Camera System ('cctv' / 'security-camera' recording)"
+    echo -e "  ${YELLOW}6)${NC} Retro Games & Nostalgia Store ('retro-store' classic game installer)"
+    echo -e "  ${YELLOW}7)${NC} AI Agents (Nous Hermes Agent + Google Antigravity CLI)"
+    echo ""
+    echo -e "  ${RED}0)${NC} Exit / Keep Pure Minimal Server (No extra packages)"
+    echo ""
+    echo "======================================================================"
+}
+
+main() {
+    # If running from PC, check ADB
+    if [ "$IS_LOCAL" -eq 0 ]; then
+        if ! adb devices 2>/dev/null | grep -q "device$"; then
+            log_err "No ADB device detected! Connect tablet via USB."
+            exit 1
+        fi
+    fi
+
+    CHOICE="${1:-}"
+
+    if [ -z "$CHOICE" ]; then
+        show_menu
+        read -p "Enter choice [0-7, default: 1]: " CHOICE
+        CHOICE="${CHOICE:-1}"
+    fi
+
+    case "$CHOICE" in
+        1|all|full)
+            echo -e "\n${GREEN}Starting Full Suite Installation...${NC}"
+            install_audio_suite
+            install_video_suite
+            install_browsers
+            install_cctv
+            install_retro_store
+            install_ai_agents
+            ;;
+        2|audio|yt)
+            install_audio_suite
+            ;;
+        3|video|vlc|watch)
+            install_video_suite
+            ;;
+        4|browser|browsers|web)
+            install_browsers
+            ;;
+        5|cctv|camera|security)
+            install_cctv
+            ;;
+        6|retro|games|store)
+            install_retro_store
+            ;;
+        7|ai|hermes|agy)
+            install_ai_agents
+            ;;
+        0|exit|quit|q)
+            echo -e "\n${GREEN}Keeping tablet as a Pure Minimal Server. Done!${NC}"
+            exit 0
+            ;;
+        *)
+            log_err "Invalid selection: $CHOICE"
+            exit 1
+            ;;
+    esac
+
+    echo -e "\n${GREEN}${BOLD}======================================================================${NC}"
+    echo -e "${GREEN}${BOLD}   AUTO-DOWNLOADER COMPLETED SUCCESSFULLY!                           ${NC}"
+    echo -e "${GREEN}${BOLD}======================================================================${NC}"
+    echo -e "All selected packages have been deployed and optimized."
+    echo -e "You can run ${YELLOW}auto-downloader${NC} again at any time to add more tools."
+    echo -e "======================================================================\n"
+}
+
+main "$@"

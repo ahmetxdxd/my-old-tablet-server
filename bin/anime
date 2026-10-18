@@ -1,0 +1,141 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - Ad-Free Anime Player & Streamer for Tablets
+# ==============================================================================
+# Plays Anime smoothly with zero ads using:
+#   1. AnimeDLR (Native app with 10,000+ series: AnimePahe, 9Anime, etc.)
+#   2. Lightning Browser (Adblock-enabled Turkish/Global anime sites: Animecix, Miruro)
+#   3. Hardware-Accelerated VLC Video Streamer
+# ==============================================================================
+
+set -e
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd || echo "")"
+
+GREEN='\033[01;32m'
+BLUE='\033[01;34m'
+YELLOW='\033[01;33m'
+RED='\033[01;31m'
+CYAN='\033[01;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+detect_target() {
+    # 1. Check USB tablet first (skip phones)
+    for DEV in $(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}'); do
+        local MODEL=$(adb -s "$DEV" shell "getprop ro.product.model" 2>/dev/null | tr -d '\r\n')
+        if [[ ! "$MODEL" =~ "SM-G"|"SM-S"|"SM-A"|"iPhone" ]]; then
+            echo "adb:$DEV"
+            return
+        fi
+    done
+
+    # 2. Check Wi-Fi Samsung Tablet (SM-T210)
+    if ping -c 1 -W 1 192.168.1.109 >/dev/null 2>&1; then
+        echo "ssh:192.168.1.109"
+        return
+    fi
+
+    # 3. Check Wi-Fi Vestel Tablet (192.168.1.111)
+    if ping -c 1 -W 1 192.168.1.111 >/dev/null 2>&1; then
+        echo "wifi:192.168.1.111"
+        return
+    fi
+
+    echo "none"
+}
+
+run_on_tablet() {
+    local CMD="$1"
+    local TARGET=$(detect_target)
+    local T_TYPE=$(echo "$TARGET" | cut -d':' -f1)
+    local T_ID=$(echo "$TARGET" | cut -d':' -f2)
+
+    case "$T_TYPE" in
+        adb)
+            adb -s "$T_ID" shell "$CMD"
+            ;;
+        ssh)
+            ssh -p 22 -o StrictHostKeyChecking=no root@$T_ID "
+                export ANDROID_ROOT=/system
+                export ANDROID_DATA=/data
+                export BOOTCLASSPATH=/system/framework/core.jar:/system/framework/conscrypt.jar:/system/framework/core-junit.jar:/system/framework/bouncycastle.jar:/system/framework/ext.jar:/system/framework/framework.jar:/system/framework/framework2.jar:/system/framework/twframework.jar:/system/framework/android.policy.jar:/system/framework/services.jar:/system/framework/apache-xml.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/mms-common.jar:/system/framework/webviewchromium.jar:/system/framework/sec_edm.jar:/system/framework/com.android.location.provider.jar:/system/framework/input.jar:/system/framework/okhttp.jar
+                export LD_LIBRARY_PATH=/vendor/lib:/system/lib:/lib
+                export PATH=/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin:\$PATH
+                $CMD
+            "
+            ;;
+        wifi)
+            adb connect "$T_ID:5555" >/dev/null 2>&1 || true
+            adb -s "$T_ID:5555" shell "$CMD" 2>/dev/null || echo -e "${RED}[HATA] Tablete ulaşılamadı.${NC}"
+            ;;
+        *)
+            echo -e "${RED}[HATA] Bağlı tablet bulunamadı. Lütfen tableti USB ile bağlayın veya Wi-Fi'ye dahil edin.${NC}"
+            exit 1
+            ;;
+    esac
+}
+
+CMD="${1:-app}"
+shift || true
+
+case "$CMD" in
+    app|"")
+        echo -e "${CYAN}${BOLD}[Anime] AnimeDLR Uygulaması tablet ekranında başlatılıyor...${NC}"
+        run_on_tablet "am start -n net.android.adm/.activity.MainActivity"
+        echo -e "${GREEN}✓ AnimeDLR açıldı! Binlerce anime serisini reklamsız izleyebilirsiniz.${NC}"
+        ;;
+    web)
+        URL="${1:-https://animecix.net}"
+        echo -e "${CYAN}${BOLD}[Anime Web] Reklamsız Lightning Browser ile anime portalı açılıyor ($URL)...${NC}"
+        run_on_tablet "am start -n acr.browser.lightning/.MainActivity -d '$URL'"
+        echo -e "${GREEN}✓ Reklamsız anime tarayıcısı açıldı.${NC}"
+        ;;
+    miruro)
+        echo -e "${CYAN}${BOLD}[Anime] Reklamsız Miruro Anime Portalı açılıyor...${NC}"
+        run_on_tablet "am start -n acr.browser.lightning/.MainActivity -d 'https://miruro.online'"
+        echo -e "${GREEN}✓ Miruro açıldı.${NC}"
+        ;;
+    play)
+        QUERY="$*"
+        if [ -z "$QUERY" ]; then
+            echo "Kullanım: anime play <video-url veya anime adı>"
+            exit 1
+        fi
+        echo -e "${CYAN}[Anime Stream] Video akışı çözülüyor: $QUERY...${NC}"
+        TARGET="$QUERY"
+        if [[ ! "$QUERY" =~ ^https?:// ]]; then
+            TARGET="ytsearch1:$QUERY"
+        fi
+        STREAM_URL=$(yt-dlp -4 --js-runtimes quickjs -g -f "best[ext=mp4]/b/best" "$TARGET" 2>/dev/null | head -n 1)
+        if [ -z "$STREAM_URL" ]; then
+            STREAM_URL=$(yt-dlp -4 --js-runtimes quickjs -g "$TARGET" 2>/dev/null | head -n 1)
+        fi
+        if [ -z "$STREAM_URL" ]; then
+            echo -e "${RED}[HATA] Yayın linki çözülemedi. Lütfen URL'yi kontrol edin.${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}[Anime] VLC donanım hızlandırma ile oynatılıyor...${NC}"
+        run_on_tablet "am start -a android.intent.action.VIEW -d '$STREAM_URL' -t 'video/*' -n org.videolan.vlc/.StartActivity"
+        echo -e "${GREEN}✓ Video tablet ekranında tam ekran oynatılıyor! Kapatmak için: anime stop${NC}"
+        ;;
+    stop)
+        echo -e "${YELLOW}[Anime] Anime uygulamaları ve VLC oynatıcı kapatılıyor...${NC}"
+        run_on_tablet "am force-stop net.android.adm; am force-stop org.videolan.vlc; am force-stop acr.browser.lightning"
+        echo -e "${GREEN}✓ Tüm anime oynatıcıları durduruldu.${NC}"
+        ;;
+    help|--help|-h)
+        echo -e "${CYAN}${BOLD}=== MY TABLET ANIME OYNATICI (REKLAMSIZ) ===${NC}"
+        echo "Kullanım:"
+        echo "  anime                : AnimeDLR uygulamasını tablet ekranında açar (10.000+ anime)"
+        echo "  anime app            : AnimeDLR uygulamasını açar"
+        echo "  anime web [url]      : Reklamsız web tarayıcısıyla Animecix / anime sitesi açar"
+        echo "  anime miruro         : Miruro ad-free portalını açar"
+        echo "  anime play <url>     : URL veya videoyu VLC donanım hızlandırma ile doğrudan oynatır"
+        echo "  anime stop           : Oynatmayı durdurur ve uygulamaları kapatır"
+        ;;
+    *)
+        echo -e "${YELLOW}Bilinmeyen komut. 'anime app' başlatılıyor...${NC}"
+        run_on_tablet "am start -n net.android.adm/.activity.MainActivity"
+        ;;
+esac

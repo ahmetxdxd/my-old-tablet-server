@@ -1,0 +1,128 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - Universal Tablet Debloater & Optimizer
+# ==============================================================================
+# Safely debloats both Rooted (Samsung) and Unrooted Stock (Vestel) tablets.
+# Disables Facebook, carrier bloat, dead Google services, and OEM spyware.
+# Maximizes free RAM and battery life.
+# ==============================================================================
+
+set -e
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd || echo "")"
+
+GREEN='\033[01;32m'
+BLUE='\033[01;34m'
+YELLOW='\033[01;33m'
+RED='\033[01;31m'
+CYAN='\033[01;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+BLOAT_PACKAGES="
+com.tikle.turkcellGollerCepte
+com.turkcell.gncplay
+tr.com.turkcell.akillidepo
+com.ttech.android.onlineislem
+com.solidict.tatlidukkanim
+com.gazetekeyfi
+tr.com.fitwell.app
+com.facebook.katana
+cn.wps.moffice_eng
+com.vestel.smartcenter
+com.softwinner.videotest
+com.softwinner.dragonfire
+com.softwinner.update
+com.softwinner.baseservice
+com.softwinner.explore
+com.towelapps.zigroo
+com.jiuzhangtech.sudoku
+com.google.android.googlequicksearchbox
+com.google.android.apps.plus
+com.google.android.apps.magazines
+com.google.android.apps.books
+com.google.android.videos
+com.google.android.music
+com.google.android.talk
+com.google.android.street
+com.google.android.apps.cloudprint
+com.google.android.play.games
+com.google.android.youtube
+com.google.android.apps.genie.geniewidget
+com.google.android.marvin.talkback
+com.android.email
+com.android.exchange
+com.android.noisefield
+com.android.magicsmoke
+com.android.galaxy4
+com.android.phasebeam
+com.android.wallpaper.holospiral
+com.android.chrome
+com.google.android.keep
+com.google.android.calendar
+com.google.android.apps.docs
+com.google.android.tag
+com.google.android.apps.maps
+com.google.android.gm
+com.android.phone
+com.android.providers.telephony
+com.android.smspush
+com.android.browser.provider
+com.android.providers.partnerbookmarks
+com.sec.android.app.FlashBarService
+com.sec.android.pagebuddynotisvc
+com.samsung.android.app.gestureservice
+com.sec.android.app.wallpaperchooser
+com.sec.android.daemonapp.ap.accuweather
+com.sec.android.widgetapp.at.hero.accuweather
+com.sec.android.widgetapp.digitalclock
+com.sec.android.widgetapp.SPlannerAppWidget
+com.sec.android.daemonapp.ap.yahoonews
+flipboard.app
+com.deezer.android.partner
+com.samsung.helphub
+com.sec.android.Kies
+com.sec.spp.push
+"
+
+echo -e "${CYAN}${BOLD}"
+echo "======================================================================"
+echo "         MY TABLET SERVER - TABLET OPTIMIZER & DEBLOATER             "
+echo "======================================================================"
+echo -e "${NC}"
+
+for DEV in $(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}'); do
+    MODEL=$(adb -s "$DEV" shell "getprop ro.product.model" 2>/dev/null | tr -d '\r\n')
+    if [[ "$MODEL" =~ "SM-G"|"SM-S"|"SM-A"|"iPhone" ]]; then
+        continue
+    fi
+
+    echo -e "${BLUE}[BİLGİ] $MODEL ($DEV) optimize ediliyor ve temizleniyor...${NC}"
+
+    HAS_SU=$(adb -s "$DEV" shell "su -c 'echo root_ok'" 2>/dev/null | tr -d '\r\n' || true)
+
+    BLOCKED_COUNT=0
+    for PKG in $BLOAT_PACKAGES; do
+        if [ "$HAS_SU" = "root_ok" ]; then
+            adb -s "$DEV" shell "su -c 'pm block $PKG 2>/dev/null || pm disable $PKG 2>/dev/null; am force-stop $PKG 2>/dev/null'" >/dev/null 2>&1 || true
+        else
+            adb -s "$DEV" shell "pm block $PKG 2>/dev/null || pm disable $PKG 2>/dev/null; am force-stop $PKG 2>/dev/null" >/dev/null 2>&1 || true
+        fi
+        BLOCKED_COUNT=$((BLOCKED_COUNT + 1))
+    done
+
+    # Apply power & UI speedups
+    adb -s "$DEV" shell "
+        settings put global window_animation_scale 0.5 2>/dev/null
+        settings put global transition_animation_scale 0.5 2>/dev/null
+        settings put global animator_duration_scale 0.5 2>/dev/null
+        settings put global wifi_sleep_policy 2 2>/dev/null
+        settings put system screen_off_timeout 600000 2>/dev/null
+        settings put system screen_brightness_mode 0 2>/dev/null
+        settings put global stay_on_while_plugged_in 3 2>/dev/null
+    " >/dev/null 2>&1 || true
+
+    echo -e "${GREEN}[TAMAM] ✓ $MODEL: $BLOCKED_COUNT gereksiz servis/uygulama donduruldu, RAM serbest bırakıldı.${NC}"
+done
+
+echo -e "\n${GREEN}${BOLD}Tüm tabletler başarıyla optimize edildi!${NC}"

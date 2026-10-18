@@ -1,0 +1,69 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - Smart Alarm & Wake-up Chime Player
+# ==============================================================================
+
+ACTION="${1:-play}"
+
+ALARM_DIR="/system/media/audio/alarms"
+CUSTOM_DIR="/root/alarms"
+
+case "$ACTION" in
+    stop|off)
+        play-sound stop
+        echo "[Alarm] Stopped."
+        ;;
+    list)
+        echo "=== Available System Alarms ==="
+        ls -1 "$ALARM_DIR" 2>/dev/null
+        if [ -d "$CUSTOM_DIR" ]; then
+            echo "=== Custom Alarms (/root/alarms) ==="
+            ls -1 "$CUSTOM_DIR" 2>/dev/null
+        fi
+        ;;
+    play|*)
+        SELECTED=""
+        if [ -n "$1" ] && [ "$1" != "play" ]; then
+            if [ -f "$1" ]; then
+                SELECTED="$1"
+            elif [ -f "$CUSTOM_DIR/$1" ]; then
+                SELECTED="$CUSTOM_DIR/$1"
+            elif [ -f "$ALARM_DIR/$1" ]; then
+                SELECTED="$ALARM_DIR/$1"
+            fi
+        fi
+
+        if [ -z "$SELECTED" ]; then
+            SELECTED=$(find "$ALARM_DIR" -type f -name "*.ogg" 2>/dev/null | head -n 1)
+        fi
+
+        if [ -n "$SELECTED" ] && [ -f "$SELECTED" ]; then
+            echo "[Alarm] Playing alarm audio: $(basename "$SELECTED")"
+            set-volume 90
+            play-sound "$SELECTED"
+        else
+            echo "[Alarm] Synthesizing wake-up chime tone via Python..."
+            python3 -c "
+import math, sys, socket
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+try:
+    s.connect(('127.0.0.1', 4711))
+    rate = 44100
+    for _ in range(5):
+        for freq in [880, 1046, 1318, 1760]:
+            samples = int(rate * 0.15)
+            buf = bytearray()
+            for i in range(samples):
+                val = int(math.sin(2 * math.pi * freq * (i / rate)) * 28000)
+                b = val.to_bytes(2, byteorder='little', signed=True)
+                buf.extend(b)
+                buf.extend(b)
+            s.sendall(buf)
+except Exception as e:
+    print('Error:', e)
+finally:
+    s.close()
+"
+        fi
+        ;;
+esac

@@ -1,0 +1,36 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - Google Antigravity CLI Bridge (agy)
+# ==============================================================================
+# 32-bit ARMv7 tablets cannot run 64-bit native agy binaries directly.
+# This smart bridge:
+#   1. Seamlessly attaches to Host PC's full Antigravity CLI session if online.
+#   2. Falls back to standalone local Antigravity AI terminal agent if offline.
+# ==============================================================================
+
+PC_USER="${PC_USER:-neo}"
+PC_IP="${PC_IP:-192.168.1.110}"
+
+# Check if Host PC SSH is reachable
+if nc -z -w 2 "$PC_IP" 22 >/dev/null 2>&1; then
+    echo "[Antigravity] Connecting to Host PC ($PC_IP) Antigravity CLI session..."
+    exec ssh -t -o ConnectTimeout=2 "${PC_USER}@${PC_IP}" "export PATH=\$HOME/.local/bin:\$PATH; agy $*"
+fi
+
+# Fallback: Standalone Local AI Terminal Assistant
+echo "[Antigravity] Host PC is not running SSH (or offline). Running local AI client..."
+
+if [ -f "/usr/local/bin/hermes" ]; then
+    echo "[Antigravity] Routing prompt to Hermes local agent..."
+    exec hermes "$@"
+else
+    echo "======================================================"
+    echo "         GOOGLE ANTIGRAVITY CLI (AGY)                "
+    echo "======================================================"
+    echo "To connect to Host PC Antigravity CLI session:"
+    echo "  1. Start SSH on your PC: sudo systemctl start ssh"
+    echo "  2. Ensure PC is connected to the same Wi-Fi ($PC_IP)"
+    echo "Or install local AI agent with: auto-downloader"
+    echo "======================================================"
+    exit 0
+fi

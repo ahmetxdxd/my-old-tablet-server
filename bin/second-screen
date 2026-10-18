@@ -1,0 +1,289 @@
+#!/bin/bash
+# ==============================================================================
+# MY TABLET SERVER - Second Monitor (İkinci Ekran) Manager for Linux & Wayland
+# ==============================================================================
+# Turns your tablet into a low-latency, hardware-accelerated second display
+# for your PC (KDE Plasma Wayland / KWin).
+# Supports both USB Cable (lowest latency) and Wireless (Wi-Fi Home LAN).
+# ==============================================================================
+
+set -e
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd || echo "")"
+
+GREEN='\033[01;32m'
+BLUE='\033[01;34m'
+YELLOW='\033[01;33m'
+RED='\033[01;31m'
+CYAN='\033[01;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+PORT=5900
+PASSWORD="tablet123"
+RESOLUTION="1024x600"
+RES_W=1024
+RES_H=600
+
+log_info() { echo -e "${BLUE}[BİLGİ]${NC} $1"; }
+log_ok()   { echo -e "${GREEN}[TAMAM] ✓${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[UYARI]${NC} $1"; }
+log_err()  { echo -e "${RED}[HATA]${NC} $1"; }
+
+get_pc_ip() {
+    ip -4 addr show wlan0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n1 || \
+    ip -4 route get 1.1.1.1 2>/dev/null | grep -oP '(?<=src\s)\d+(\.\d+){3}' | head -n1 || echo "127.0.0.1"
+}
+
+get_primary_screen_info() {
+    # Extract primary screen geometry from kscreen-doctor
+    local GEOM=$(kscreen-doctor -o 2>/dev/null | grep -A 8 'Geometry:' | head -n 1 | awk '{print $2, $3}')
+    if [ -z "$GEOM" ]; then
+        echo "0,0 1600x900"
+    else
+        echo "$GEOM"
+    fi
+}
+
+detect_tablet() {
+    # Check USB tablets first
+    for DEV in $(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}'); do
+        local MODEL=$(adb -s "$DEV" shell "getprop ro.product.model" 2>/dev/null | tr -d '\r\n')
+        # Skip smartphones
+        if [[ "$MODEL" =~ "SM-G"|"SM-S"|"SM-A"|"iPhone" ]]; then
+            continue
+        fi
+        if [ -n "$DEV" ]; then
+            echo "usb:$DEV"
+            return
+        fi
+    done
+
+    # Check Wi-Fi Vestel Tablet (192.168.1.111)
+    if ping -c 1 -W 1 192.168.1.111 >/dev/null 2>&1; then
+        echo "wifi:192.168.1.111"
+        return
+    fi
+
+    # Check Wi-Fi Samsung Tablet (192.168.1.109)
+    if ping -c 1 -W 1 192.168.1.109 >/dev/null 2>&1; then
+        echo "wifi:192.168.1.109"
+        return
+    fi
+
+    echo "none"
+}
+
+start_second_screen() {
+    local CONN_MODE="${1:-auto}"
+    local POSITION="${2:-right}"
+
+    echo -e "${CYAN}${BOLD}"
+    echo "======================================================================"
+    echo "       MY TABLET SERVER - PC İKİNCİ EKRAN (SECOND MONITOR) MODU       "
+    echo "======================================================================"
+    echo -e "${NC}"
+
+    # 1. Sync Wi-Fi automatically
+    if [ -x "$DIR/bin/sync-wifi" ]; then
+        log_info "Wi-Fi bağlantısı kontrol ediliyor ve senkronize ediliyor..."
+        "$DIR/bin/sync-wifi" 2>/dev/null || true
+    fi
+
+    # 2. Detect target tablet
+    local TARGET=$(detect_tablet)
+    local TARGET_TYPE=$(echo "$TARGET" | cut -d':' -f1)
+    local TARGET_ID=$(echo "$TARGET" | cut -d':' -f2)
+
+    if [ "$CONN_MODE" = "usb" ] && [ "$TARGET_TYPE" != "usb" ]; then
+        log_warn "USB bağlantısı seçildi ancak USB'den bağlı tablet bulunamadı. Wi-Fi deneniyor..."
+        CONN_MODE="wifi"
+    fi
+
+    if [ "$CONN_MODE" = "auto" ]; then
+        if [ "$TARGET_TYPE" = "usb" ]; then
+            CONN_MODE="usb"
+        elif [ "$TARGET_TYPE" = "wifi" ]; then
+            CONN_MODE="wifi"
+        else
+            log_err "Herhangi bir bağlı tablet bulunamadı! Lütfen tableti USB ile bağlayın veya Wi-Fi'ye dahil edin."
+            exit 1
+        fi
+    fi
+
+    # 3. Clean up any previous virtual monitor instance
+    stop_second_screen silent
+
+    log_info "KWin Wayland Sanal Monitör oluşturuluyor ($RESOLUTION @ 60Hz)..."
+    systemd-run --user --unit=tablet-screen \
+        /usr/bin/krfb-virtualmonitor \
+        --name "TabletEkran" \
+        --resolution "$RESOLUTION" \
+        --port "$PORT" \
+        --password "$PASSWORD" >/dev/null 2>&1
+
+    # Wait for KWin to register Virtual-TabletEkran
+    local ATTEMPTS=0
+    while ! kscreen-doctor -o 2>/dev/null | grep -q "Virtual-TabletEkran"; do
+        sleep 0.5
+        ATTEMPTS=$((ATTEMPTS + 1))
+        if [ $ATTEMPTS -gt 10 ]; then
+            log_err "Sanal ekran oluşturulamadı! KWin/Wayland oturumunuzu kontrol edin."
+            exit 1
+        fi
+    done
+    log_ok "KWin Sanal Ekran (Virtual-TabletEkran) başarıyla oluşturuldu."
+
+    # 4. Position the virtual display relative to primary monitor
+    log_info "Ekran konumu ayarlanıyor (Konum: $POSITION)..."
+    local PRIM_W=1600
+    local POS_X=1600
+    local POS_Y=0
+
+    case "$POSITION" in
+        left)
+            POS_X=-$RES_W
+            POS_Y=0
+            ;;
+        right)
+            POS_X=$PRIM_W
+            POS_Y=0
+            ;;
+        top)
+            POS_X=0
+            POS_Y=-$RES_H
+            ;;
+        bottom)
+            POS_X=0
+            POS_Y=900
+            ;;
+        *)
+            POS_X=$PRIM_W
+            POS_Y=0
+            ;;
+    esac
+
+    kscreen-doctor output.Virtual-TabletEkran.position.${POS_X},${POS_Y} >/dev/null 2>&1 || true
+    log_ok "Ekran konumu ayarlandı: X=$POS_X, Y=$POS_Y"
+
+    # 5. Launch bVNC on tablet
+    local PC_IP=$(get_pc_ip)
+
+    if [ "$CONN_MODE" = "usb" ]; then
+        log_info "USB Kablo Modu: Port yönlendirme kuruluyor ve bVNC başlatılıyor..."
+        adb -s "$TARGET_ID" forward tcp:$PORT tcp:$PORT 2>/dev/null || adb forward tcp:$PORT tcp:$PORT 2>/dev/null || true
+        adb -s "$TARGET_ID" shell "am start -a android.intent.action.VIEW -d 'vnc://$PASSWORD@$PC_IP:$PORT'" >/dev/null 2>&1 || \
+        adb shell "am start -a android.intent.action.VIEW -d 'vnc://$PASSWORD@$PC_IP:$PORT'" >/dev/null 2>&1 || true
+        log_ok "USB bağlantısı tamamlandı (Sıfır Gecikme Modu)."
+    else
+        log_info "Kablosuz Wi-Fi Modu: PC IP: $PC_IP:$PORT üzerinden bağlanılıyor..."
+        if [ "$TARGET_TYPE" = "wifi" ]; then
+            ssh -o StrictHostKeyChecking=no root@$TARGET_ID '
+                export ANDROID_ROOT=/system
+                export ANDROID_DATA=/data
+                export BOOTCLASSPATH=/system/framework/core.jar:/system/framework/conscrypt.jar:/system/framework/core-junit.jar:/system/framework/bouncycastle.jar:/system/framework/ext.jar:/system/framework/framework.jar:/system/framework/framework2.jar:/system/framework/twframework.jar:/system/framework/android.policy.jar:/system/framework/services.jar:/system/framework/apache-xml.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/mms-common.jar:/system/framework/webviewchromium.jar:/system/framework/sec_edm.jar:/system/framework/com.android.location.provider.jar:/system/framework/input.jar:/system/framework/okhttp.jar
+                export LD_LIBRARY_PATH=/vendor/lib:/system/lib:/lib
+                export PATH=/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin:$PATH
+                /system/bin/am start -a android.intent.action.VIEW -d "vnc://'$PASSWORD'@'$PC_IP':'$PORT'" >/dev/null 2>&1
+            ' >/dev/null 2>&1 || true
+        else
+            adb shell "am start -a android.intent.action.VIEW -d 'vnc://$PASSWORD@$PC_IP:$PORT'" >/dev/null 2>&1 || true
+        fi
+        log_ok "Wi-Fi bağlantısı tamamlandı (Kablosuz İkinci Ekran)."
+    fi
+
+    echo -e "\n${GREEN}${BOLD}======================================================================${NC}"
+    echo -e "${GREEN}${BOLD}   İKİNCİ EKRAN BAŞARIYLA BAŞLATILDI!                                ${NC}"
+    echo -e "${GREEN}${BOLD}======================================================================${NC}"
+    echo -e " • Çözünürlük : ${YELLOW}$RESOLUTION @ 60 FPS${NC}"
+    echo -e " • Konum      : ${YELLOW}$POSITION (Fare imlecini ekranın $POSITION kenarından kaydırın)${NC}"
+    echo -e " • Bağlantı   : ${YELLOW}$CONN_MODE ($PC_IP:$PORT)${NC}"
+    echo -e ""
+    echo -e "İstediğiniz pencereyi sürükleyip tablet ekranına bırakabilirsiniz."
+    echo -e "Kapatmak için: ${YELLOW}second-screen stop${NC}"
+    echo -e "======================================================================\n"
+}
+
+stop_second_screen() {
+    local SILENT="${1:-}"
+
+    if [ -z "$SILENT" ]; then
+        log_info "İkinci ekran kapatılıyor ve kaynaklar temizleniyor..."
+    fi
+
+    systemctl --user stop tablet-screen 2>/dev/null || true
+    pkill -9 -f krfb-virtualmonitor 2>/dev/null || true
+
+    # Close bVNC on connected ADB tablets
+    for DEV in $(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}'); do
+        local MODEL=$(adb -s "$DEV" shell "getprop ro.product.model" 2>/dev/null | tr -d '\r\n')
+        if [[ ! "$MODEL" =~ "SM-G"|"SM-S"|"SM-A"|"iPhone" ]]; then
+            adb -s "$DEV" shell "am force-stop com.iiordanov.freebVNC" >/dev/null 2>&1 || true
+        fi
+    done
+
+    if ping -c 1 -W 1 192.168.1.109 >/dev/null 2>&1; then
+        ssh -o StrictHostKeyChecking=no root@192.168.1.109 '
+            export ANDROID_ROOT=/system
+            export ANDROID_DATA=/data
+            export BOOTCLASSPATH=/system/framework/core.jar:/system/framework/conscrypt.jar:/system/framework/core-junit.jar:/system/framework/bouncycastle.jar:/system/framework/ext.jar:/system/framework/framework.jar:/system/framework/framework2.jar:/system/framework/twframework.jar:/system/framework/android.policy.jar:/system/framework/services.jar:/system/framework/apache-xml.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/mms-common.jar:/system/framework/webviewchromium.jar:/system/framework/sec_edm.jar:/system/framework/com.android.location.provider.jar:/system/framework/input.jar:/system/framework/okhttp.jar
+            export LD_LIBRARY_PATH=/vendor/lib:/system/lib:/lib
+            export PATH=/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin:$PATH
+            /system/bin/am force-stop com.iiordanov.freebVNC >/dev/null 2>&1 || true
+        ' >/dev/null 2>&1 || true
+    fi
+
+    if [ -z "$SILENT" ]; then
+        log_ok "İkinci ekran kapatıldı. KWin ve masaüstü normale döndü."
+    fi
+}
+
+show_status() {
+    echo -e "${CYAN}${BOLD}=== İkinci Ekran Durumu ===${NC}"
+    if systemctl --user is-active tablet-screen >/dev/null 2>&1; then
+        echo -e "Durum       : ${GREEN}AKTİF (Çalışıyor)${NC}"
+        kscreen-doctor -o 2>/dev/null | grep -A 6 'Virtual-TabletEkran' || true
+    else
+        echo -e "Durum       : ${RED}KAPALI${NC}"
+    fi
+}
+
+usage() {
+    echo "Kullanım: second-screen <start|stop|status|usb|wifi> [right|left|top|bottom]"
+    echo ""
+    echo "Komutlar:"
+    echo "  second-screen start [right|left] : Otomatik tespit ile ikinci ekranı başlatır"
+    echo "  second-screen usb [right|left]   : Kablolu USB modunda başlatır (0ms ultra düşük gecikme)"
+    echo "  second-screen wifi [right|left]  : Kablosuz Wi-Fi modunda başlatır"
+    echo "  second-screen stop               : İkinci ekranı kapatır ve sanal monitörü siler"
+    echo "  second-screen status             : Mevcut ekran durumunu gösterir"
+    echo ""
+    echo "Örnekler:"
+    echo "  second-screen start right  # Tableti PC ekranının sağına ekler"
+    echo "  second-screen start left   # Tableti PC ekranının soluna ekler"
+    echo "  second-screen stop         # Kapatır"
+}
+
+case "${1:-}" in
+    start)
+        shift
+        start_second_screen "auto" "${1:-right}"
+        ;;
+    usb)
+        shift
+        start_second_screen "usb" "${1:-right}"
+        ;;
+    wifi)
+        shift
+        start_second_screen "wifi" "${1:-right}"
+        ;;
+    stop)
+        stop_second_screen
+        ;;
+    status)
+        show_status
+        ;;
+    *)
+        usage
+        ;;
+esac

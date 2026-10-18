@@ -1,0 +1,207 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - Retro & Nostalgia Store (KitKat 4.4.2 Optimized)
+# ==============================================================================
+# Curated collection of legendary 60 FPS classic Android games tested & verified
+# for Samsung Galaxy Tab 3 (SM-T210 / ARMv7 KitKat 4.4.2).
+# ==============================================================================
+
+set -e
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd || echo "")"
+
+GREEN='\033[01;32m'
+BLUE='\033[01;34m'
+YELLOW='\033[01;33m'
+RED='\033[01;31m'
+CYAN='\033[01;36m'
+MAGENTA='\033[01;35m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+log_info() { echo -e "${BLUE}[BİLGİ]${NC} $1"; }
+log_ok()   { echo -e "${GREEN}[TAMAM] ✓${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[UYARI]${NC} $1"; }
+log_err()  { echo -e "${RED}[HATA]${NC} $1"; }
+
+# Android Runtime Environment Wrapper (Required inside chroot / Linux)
+run_pm_install() {
+    local APK_PATH="$1"
+    if [ -x "/system/bin/pm" ]; then
+        export ANDROID_ROOT=/system
+        export ANDROID_DATA=/data
+        export BOOTCLASSPATH=/system/framework/core.jar:/system/framework/conscrypt.jar:/system/framework/core-junit.jar:/system/framework/bouncycastle.jar:/system/framework/ext.jar:/system/framework/framework.jar:/system/framework/framework2.jar:/system/framework/twframework.jar:/system/framework/android.policy.jar:/system/framework/services.jar:/system/framework/apache-xml.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/mms-common.jar:/system/framework/webviewchromium.jar:/system/framework/sec_edm.jar:/system/framework/com.android.location.provider.jar:/system/framework/input.jar:/system/framework/okhttp.jar
+        export LD_LIBRARY_PATH=/vendor/lib:/system/lib:/lib
+        export PATH=/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin:$PATH
+
+        /system/bin/pm install -r "$APK_PATH"
+    else
+        log_err "Android /system/bin/pm bulunamadı!"
+        return 1
+    fi
+}
+
+# Detect environment (Chroot / Tablet Local vs Host PC)
+IS_LOCAL=0
+if [ -f "/etc/alpine-release" ] || [ -e "/system/bin/sh" ] || ! command -v adb >/dev/null 2>&1; then
+    IS_LOCAL=1
+fi
+
+install_apk() {
+    local NAME="$1"
+    local FILE="$2"
+    local URL="$3"
+
+    echo -e "\n${CYAN}======================================================================${NC}"
+    echo -e "${YELLOW}--> Kuruluyor: ${BOLD}$NAME${NC} ($FILE)"
+    echo -e "${CYAN}======================================================================${NC}"
+
+    if [ "$IS_LOCAL" -eq 1 ]; then
+        local TARGET_PATH=""
+
+        # Check local offline caches first
+        if [ -f "/sdcard/retro-apks/$FILE" ]; then
+            TARGET_PATH="/sdcard/retro-apks/$FILE"
+            log_info "Çevrimdışı paket deposundan yükleniyor (/sdcard/retro-apks/$FILE)..."
+        elif [ -f "/sdcard/retro-apks/retro/$FILE" ]; then
+            TARGET_PATH="/sdcard/retro-apks/retro/$FILE"
+            log_info "Çevrimdışı paket deposundan yükleniyor..."
+        elif [ -n "$DIR" ] && [ -f "$DIR/packages/retro/$FILE" ]; then
+            TARGET_PATH="$DIR/packages/retro/$FILE"
+            log_info "Yerel depo klasöründen yükleniyor ($TARGET_PATH)..."
+        else
+            mkdir -p /sdcard/download 2>/dev/null || true
+            TARGET_PATH="/sdcard/download/$FILE"
+            log_info "Paket çevrimiçi sunucudan indiriliyor..."
+            if ! curl -k -L --connect-timeout 15 -o "$TARGET_PATH" "$URL"; then
+                log_err "İndirme başarısız oldu: $URL"
+                return 1
+            fi
+        fi
+
+        log_info "Android sistemine kuruluyor..."
+        if run_pm_install "$TARGET_PATH"; then
+            log_ok "$NAME başarıyla kuruldu!"
+        else
+            log_err "$NAME kurulumu sırasında bir sorun oluştu."
+            return 1
+        fi
+    else
+        local LOCAL_PKG=""
+        mkdir -p "$DIR/packages/retro"
+
+        if [ -f "$DIR/packages/retro/$FILE" ]; then
+            LOCAL_PKG="$DIR/packages/retro/$FILE"
+            log_info "PC yerel deposundan yükleniyor ($LOCAL_PKG)..."
+        else
+            LOCAL_PKG="$DIR/packages/retro/$FILE"
+            log_info "PC'ye indiriliyor: $URL..."
+            if ! curl -k -L --connect-timeout 15 -o "$LOCAL_PKG" "$URL"; then
+                log_err "İndirme başarısız oldu!"
+                return 1
+            fi
+        fi
+
+        log_info "ADB ile tablete yükleniyor..."
+        if adb install -r "$LOCAL_PKG"; then
+            log_ok "$NAME başarıyla tablete yüklendi!"
+        else
+            log_err "ADB yükleme hatası!"
+            return 1
+        fi
+    fi
+}
+
+show_menu() {
+    clear 2>/dev/null || true
+    echo -e "${CYAN}${BOLD}"
+    echo "======================================================================"
+    echo "       MY TABLET SERVER - SEÇKİN KLASİK OYUN & UYGULAMA MAĞAZASI     "
+    echo "======================================================================"
+    echo -e "${NC}"
+    echo -e "Android 4.4.2 KitKat için optimize edilmiş, %100 çalışan ve akıcı oyunlar:"
+    echo ""
+    echo -e "  ${YELLOW}${BOLD}[Seçkin & Akıcı Oyunlar]${NC}"
+    echo -e "  ${GREEN}1)${NC}  Hill Climb Racing (v1.42.0 - Sınırsız Para/Elmas Hileli)"
+    echo -e "  ${GREEN}2)${NC}  Minecraft Pocket Edition (v0.14.0 - Klasik Overworld Sürümü)"
+    echo -e "  ${GREEN}3)${NC}  Subway Surfers (Klasik ARMv7 - 60 FPS)"
+    echo -e "  ${GREEN}4)${NC}  Angry Birds Go! (v1.0.1 - 3D Kart Yarışı)"
+    echo -e "  ${GREEN}5)${NC}  Flappy Bird (2013 Orijinal Dong Nguyen - Efsane)"
+    echo -e "  ${GREEN}6)${NC}  Angry Birds Classic HD (Orijinal Kızgın Kuşlar)"
+    echo ""
+    echo -e "  ${BLUE}${BOLD}[Klasik Araçlar]${NC}"
+    echo -e "  ${GREEN}7)${NC}  QuickPic Classic Gallery (Nanling Zheng - 1.1 MB Ultra Hızlı Galeri)"
+    echo ""
+    echo -e "  ${MAGENTA}${BOLD}[Toplu Kurulum]${NC}"
+    echo -e "  ${GREEN}${BOLD}8)${NC}  ${BOLD}TÜMÜNÜ KUR (Tüm Seçkin Oyunlar & Galeri)${NC}"
+    echo ""
+    echo -e "  ${RED}0)${NC}  Çıkış"
+    echo ""
+    echo -e "${CYAN}======================================================================${NC}"
+}
+
+main() {
+    CHOICE="${1:-}"
+
+    if [ -z "$CHOICE" ]; then
+        show_menu
+        read -p "Seçiminizi yapın [0-8, varsayılan: 8]: " CHOICE
+        CHOICE="${CHOICE:-8}"
+    fi
+
+    case "$CHOICE" in
+        1|hill|hillclimb)
+            install_apk "Hill Climb Racing (Sınırsız Para)" "hill-climb-mod.apk" \
+                "https://archive.org/download/Hill_Climb_Racing_v1.42.0_MOD_ApkHouse.com/Hill_Climb_Racing_v1.42.0_MOD_ApkHouse.com.apk"
+            ;;
+        2|mcpe|minecraft)
+            install_apk "Minecraft Pocket Edition" "minecraft-pe.apk" \
+                "https://archive.org/download/mcpe-apk/MCPE-(a0.14.0).apk"
+            ;;
+        3|subway|subwaysurf)
+            install_apk "Subway Surfers" "subway-surfers.apk" \
+                "https://archive.org/download/Subway-Surf-ARMv7-V1.0/1359788067_Subway_Surf_ARMv7.apk"
+            ;;
+        4|abgo|angrybirdsgo)
+            install_apk "Angry Birds Go!" "angry-birds-go.apk" \
+                "https://ia801003.us.archive.org/5/items/angry-birds-go-1.0.1-old-version.html/Angry%20Birds%20Go%21%20%28v1.0.1%29.apk"
+            ;;
+        5|flappy)
+            install_apk "Flappy Bird (2013 Orijinal)" "flappy-bird.apk" \
+                "https://archive.org/download/flappy-bird-v-1.3_20240328/Flappy_Bird_v1.3.apk"
+            ;;
+        6|angry|angrybirds)
+            install_apk "Angry Birds Classic HD" "angry-birds.apk" \
+                "https://archive.org/download/angry-birds-classic-v-3.0.0/com.rovio.angrybirds_3.0.0.apk"
+            ;;
+        7|quickpic|gallery)
+            install_apk "QuickPic Classic Gallery" "quickpic.apk" \
+                "https://archive.org/download/Quickpic4.7.4/Quickpic4.7.4.apk"
+            ;;
+        8|all|full|hepsi)
+            install_apk "Hill Climb Racing (Sınırsız Para)" "hill-climb-mod.apk" "https://archive.org/download/Hill_Climb_Racing_v1.42.0_MOD_ApkHouse.com/Hill_Climb_Racing_v1.42.0_MOD_ApkHouse.com.apk"
+            install_apk "Minecraft Pocket Edition" "minecraft-pe.apk" "https://archive.org/download/mcpe-apk/MCPE-(a0.14.0).apk"
+            install_apk "Subway Surfers" "subway-surfers.apk" "https://archive.org/download/Subway-Surf-ARMv7-V1.0/1359788067_Subway_Surf_ARMv7.apk"
+            install_apk "Angry Birds Go!" "angry-birds-go.apk" "https://ia801003.us.archive.org/5/items/angry-birds-go-1.0.1-old-version.html/Angry%20Birds%20Go%21%20%28v1.0.1%29.apk"
+            install_apk "Flappy Bird (2013 Orijinal)" "flappy-bird.apk" "https://archive.org/download/flappy-bird-v-1.3_20240328/Flappy_Bird_v1.3.apk"
+            install_apk "Angry Birds Classic HD" "angry-birds.apk" "https://archive.org/download/angry-birds-classic-v-3.0.0/com.rovio.angrybirds_3.0.0.apk"
+            install_apk "QuickPic Classic Gallery" "quickpic.apk" "https://archive.org/download/Quickpic4.7.4/Quickpic4.7.4.apk"
+            ;;
+        0|exit|q)
+            exit 0
+            ;;
+        *)
+            log_err "Geçersiz seçim: $CHOICE"
+            exit 1
+            ;;
+    esac
+
+    echo -e "\n${GREEN}${BOLD}======================================================================${NC}"
+    echo -e "${GREEN}${BOLD}   RETRO STORE İŞLEMİ TAMAMLANDI!                                    ${NC}"
+    echo -e "${GREEN}${BOLD}======================================================================${NC}"
+    echo -e "Yüklenen oyunlarınızı tabletinizin Uygulamalar (App Drawer) menüsünden başlatabilirsiniz."
+    echo -e "İstediğiniz zaman konsoldan tekrar çalıştırmak için: ${YELLOW}retro-store${NC}"
+    echo -e "======================================================================\n"
+}
+
+main "$@"

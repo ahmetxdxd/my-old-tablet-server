@@ -1,0 +1,8 @@
+# ==============================================================================
+# MY TABLET SERVER - Authorized SSH Keys
+# ==============================================================================
+# Paste your public SSH key here (e.g., from ~/.ssh/id_ed25519.pub or ~/.ssh/id_rsa.pub)
+#
+# NOTE: The installer (install.sh and install.ps1) will automatically detect
+# and copy your host PC's public SSH key here if one exists!
+# ==============================================================================

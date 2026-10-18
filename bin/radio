@@ -1,0 +1,72 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - Live Internet Radio Player
+# ==============================================================================
+
+STATION="${1:-lofi}"
+
+if [ "$STATION" = "stop" ] || [ "$STATION" = "off" ]; then
+    pkill -f "ao-pcm-file=/proc/self/fd/1" 2>/dev/null || true
+    echo "[Radio] Stream stopped."
+    exit 0
+fi
+
+case "$STATION" in
+    lofi)
+        URL="https://stream.zeno.fm/f3wvbbqmdg8uv"
+        NAME="Lofi Hip Hop Radio"
+        ;;
+    jazz)
+        URL="http://stream.srg-ssr.ch/m/rjs/mp3_128"
+        NAME="Radio Swiss Jazz"
+        ;;
+    classic)
+        URL="http://stream.srg-ssr.ch/m/rsc_de/mp3_128"
+        NAME="Radio Swiss Classic"
+        ;;
+    chill)
+        URL="https://stream.zeno.fm/0r0xa792kwzuv"
+        NAME="Chillout Lounge Radio"
+        ;;
+    rock)
+        URL="http://stream.rockantenne.de/rockantenne/stream/mp3"
+        NAME="Rock Antenne"
+        ;;
+    http*|https*)
+        URL="$STATION"
+        NAME="Custom Stream ($STATION)"
+        ;;
+    list)
+        echo "=== Presets ==="
+        echo "  lofi       : Lofi Hip Hop Beats"
+        echo "  jazz       : Radio Swiss Jazz"
+        echo "  classic    : Radio Swiss Classic"
+        echo "  chill      : Chillout Lounge"
+        echo "  rock       : Rock Antenne"
+        echo "  or provide any direct audio stream URL"
+        exit 0
+        ;;
+    *)
+        echo "Unknown station: $STATION"
+        echo "View presets: radio list"
+        exit 1
+        ;;
+esac
+
+echo "[Radio] Tuning in to $NAME..."
+pkill -f "ao-pcm-file=/proc/self/fd/1" 2>/dev/null || true
+
+(
+    mpv \
+        --no-video \
+        --really-quiet \
+        --ao=pcm \
+        --ao-pcm-file=/proc/self/fd/1 \
+        --ao-pcm-waveheader=no \
+        --audio-format=s16 \
+        --audio-samplerate=44100 \
+        --audio-channels=stereo \
+        "$URL" 2>/dev/null | nc 127.0.0.1 4711
+) >/dev/null 2>&1 &
+
+echo "[Radio] Playing $NAME! Stop command: radio stop"

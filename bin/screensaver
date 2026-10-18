@@ -1,0 +1,255 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - Frutiger Aero & Ambient Screensaver Controller
+# ==============================================================================
+# Controls the hardware-accelerated video screensaver engine on the tablet.
+# Provides Frutiger Aero art canvas, tropical coral aquarium, cozy fireplace,
+# and cyber matrix rain loops, with digital clock & battery info overlay.
+# ==============================================================================
+
+set -e
+
+CATALOG_DIR="/sdcard/Screensavers"
+TARGET_VIDEO="/sdcard/Android/data/systems.sieber.vscreensaver/files/video.mp4"
+APP_PKG="systems.sieber.vscreensaver"
+APP_MAIN="systems.sieber.vscreensaver/.MainActivity"
+
+# Find XML config file
+PREFS_XML=""
+for p in "/android_data/systems.sieber.vscreensaver/shared_prefs/SCREENSAVER.xml" \
+         "/data/data/systems.sieber.vscreensaver/shared_prefs/SCREENSAVER.xml"; do
+    if [ -f "$p" ] || [ -d "$(dirname "$p")" ]; then
+        PREFS_XML="$p"
+        break
+    fi
+done
+
+# Colors
+GREEN='\033[01;32m'
+BLUE='\033[01;34m'
+YELLOW='\033[01;33m'
+CYAN='\033[01;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+run_am() {
+    export ANDROID_ROOT=/system
+    export ANDROID_DATA=/data
+    export BOOTCLASSPATH=/system/framework/core.jar:/system/framework/conscrypt.jar:/system/framework/core-junit.jar:/system/framework/bouncycastle.jar:/system/framework/ext.jar:/system/framework/framework.jar:/system/framework/framework2.jar:/system/framework/twframework.jar:/system/framework/android.policy.jar:/system/framework/services.jar:/system/framework/apache-xml.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/mms-common.jar:/system/framework/webviewchromium.jar:/system/framework/sec_edm.jar:/system/framework/com.android.location.provider.jar:/system/framework/input.jar:/system/framework/okhttp.jar
+    export LD_LIBRARY_PATH=/vendor/lib:/system/lib:/lib
+    export PATH=/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin:$PATH
+
+    /system/bin/am "$@"
+}
+
+ensure_prefs_xml() {
+    if [ -n "$PREFS_XML" ] && [ ! -f "$PREFS_XML" ]; then
+        mkdir -p "$(dirname "$PREFS_XML")" 2>/dev/null || true
+        cat > "$PREFS_XML" << 'EOF'
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<map>
+    <string name="videos">file:///sdcard/Screensavers/aero_art.mp4</string>
+    <boolean name="video-loop" value="true" />
+    <boolean name="video-stretch" value="true" />
+    <int name="video-volume" value="0" />
+    <boolean name="keep-screen-on" value="true" />
+    <boolean name="clock" value="true" />
+    <boolean name="clock-hrs24" value="true" />
+    <boolean name="date" value="true" />
+    <int name="color-clock" value="-1" />
+    <int name="clock-position-x" value="2" />
+    <int name="clock-position-y" value="1" />
+    <boolean name="show-battery-info" value="true" />
+</map>
+EOF
+        chmod 660 "$PREFS_XML" 2>/dev/null || true
+    fi
+}
+
+start_screensaver() {
+    local VIDEO_SRC="$1"
+    local THEME_NAME="$2"
+
+    if [ ! -f "$VIDEO_SRC" ]; then
+        echo -e "${YELLOW}[Screensaver] Dosya bulunamadı: $VIDEO_SRC${NC}"
+        echo "Lütfen ekran koruyucu video dosyasının mevcut olduğundan emin olun."
+        return 1
+    fi
+
+    ensure_prefs_xml
+
+    echo -e "${CYAN}[Screensaver] Tema yükleniyor: ${BOLD}$THEME_NAME${NC}"
+
+    # Copy video to target active location
+    mkdir -p "$(dirname "$TARGET_VIDEO")" 2>/dev/null || true
+    cp -f "$VIDEO_SRC" "$TARGET_VIDEO" 2>/dev/null || true
+
+    # Update XML preferences
+    if [ -n "$PREFS_XML" ] && [ -f "$PREFS_XML" ]; then
+        sed -i "s|<string name=\"videos\">.*</string>|<string name=\"videos\">file://$VIDEO_SRC</string>|" "$PREFS_XML" 2>/dev/null || true
+    fi
+
+    # Kill existing screensaver instance cleanly
+    pkill -9 -f "$APP_PKG" 2>/dev/null || true
+    run_am force-stop "$APP_PKG" >/dev/null 2>&1 || true
+
+    # Ensure display backlight is active
+    echo 180 > /sys/class/backlight/panel/brightness 2>/dev/null || true
+
+    # Start MainActivity
+    run_am start -n "$APP_MAIN" >/dev/null 2>&1 || true
+
+    echo -e "${GREEN}✓ Ekran Koruyucu başlatıldı! (Durdurmak için: 'screensaver stop')${NC}"
+}
+
+stop_screensaver() {
+    echo -e "${BLUE}[Screensaver] Ekran koruyucu durduruluyor...${NC}"
+    pkill -9 -f "$APP_PKG" 2>/dev/null || true
+    run_am force-stop "$APP_PKG" >/dev/null 2>&1 || true
+    echo -e "${GREEN}✓ Ekran koruyucu durduruldu.${NC}"
+}
+
+set_config_bool() {
+    local KEY="$1"
+    local VAL="$2"
+
+    ensure_prefs_xml
+    if [ -n "$PREFS_XML" ] && [ -f "$PREFS_XML" ]; then
+        sed -i "s|<boolean name=\"$KEY\" value=\"[^\"]*\" />|<boolean name=\"$KEY\" value=\"$VAL\" />|" "$PREFS_XML" 2>/dev/null || true
+        echo -e "${GREEN}✓ Ayar güncellendi: $KEY = $VAL${NC}"
+        if pgrep -f "$APP_PKG" >/dev/null 2>&1; then
+            echo -e "${CYAN}[Screensaver] Değişikliğin geçerli olması için yeniden başlatılıyor...${NC}"
+            run_am force-stop "$APP_PKG" >/dev/null 2>&1 || true
+            run_am start -n "$APP_MAIN" >/dev/null 2>&1 || true
+        fi
+    fi
+}
+
+show_status() {
+    echo "======================================================"
+    echo "         TABLET EKRAN KORUYUCU & SÜS DURUMU           "
+    echo "======================================================"
+    if pgrep -f "$APP_PKG" >/dev/null 2>&1; then
+        echo -e "Durum       : ${GREEN}AKTİF (Ekranda Oynatılıyor)${NC}"
+    else
+        echo -e "Durum       : ${YELLOW}KAPALI (Durduruldu)${NC}"
+    fi
+
+    if [ -n "$PREFS_XML" ] && [ -f "$PREFS_XML" ]; then
+        ACTIVE_VID=$(grep '<string name="videos">' "$PREFS_XML" 2>/dev/null | sed -e 's/.*<string name="videos">file:\/\///' -e 's/<\/string>.*//')
+        CLOCK_EN=$(grep '<boolean name="clock"' "$PREFS_XML" 2>/dev/null | grep -o 'value="[^"]*"' | cut -d'"' -f2)
+        BATT_EN=$(grep '<boolean name="show-battery-info"' "$PREFS_XML" 2>/dev/null | grep -o 'value="[^"]*"' | cut -d'"' -f2)
+
+        echo "Aktif Tema  : $(basename "$ACTIVE_VID" .mp4)"
+        echo "Saat Göster : $CLOCK_EN"
+        echo "Pil Göster  : $BATT_EN"
+    fi
+    echo "======================================================"
+}
+
+show_list() {
+    echo "======================================================"
+    echo "           MEVCUT EKRAN KORUYUCU TEMALARI             "
+    echo "======================================================"
+    echo -e "${BOLD}1) art / aero / tablo${NC}"
+    echo "   Frutiger Aero dijital sanat galerisi (Parlak cam küreler,"
+    echo "   yeşil tepeler, su damlaları, kuzey ışıkları aurora)"
+    echo ""
+    echo -e "${BOLD}2) aquarium / akvaryum${NC}"
+    echo "   Canlı tropikal mercan resifi akvaryumu (Nemo palyaço"
+    echo "   balıkları, turkuaz damselfish, su altı kabarcıkları)"
+    echo ""
+    echo -e "${BOLD}3) fireplace / somine${NC}"
+    echo "   Sıcak ve huzurlu çıtırdayan şömine ateşi"
+    echo ""
+    echo -e "${BOLD}4) matrix / hacker${NC}"
+    echo "   Zümrüt yeşili dijital siber yağmur akışı"
+    echo ""
+    echo -e "${BOLD}5) custom <dosya.mp4>${NC}"
+    echo "   İstediğiniz herhangi bir MP4 video dosyasını oynatın"
+    echo "======================================================"
+}
+
+interactive_menu() {
+    clear
+    show_list
+    echo ""
+    echo "Bir tema seçin:"
+    echo "  1) Frutiger Aero Sanat Tablosu (art)"
+    echo "  2) Tropikal Resif Akvaryumu (aquarium)"
+    echo "  3) Çıtırdayan Şömine Ateşi (fireplace)"
+    echo "  4) Matrix Siber Yağmur (matrix)"
+    echo "  5) Ekran Koruyucuyu Durdur (stop)"
+    echo "  q) Çıkış"
+    echo ""
+    read -p "Seçiminiz [1-5/q]: " CHOICE
+
+    case "$CHOICE" in
+        1) start_screensaver "$CATALOG_DIR/aero_art.mp4" "Frutiger Aero Sanat Tablosu" ;;
+        2) start_screensaver "$CATALOG_DIR/aquarium.mp4" "Tropikal Akvaryum" ;;
+        3) start_screensaver "$CATALOG_DIR/fireplace.mp4" "Şömine Ateşi" ;;
+        4) start_screensaver "$CATALOG_DIR/matrix.mp4" "Matrix Siber Yağmur" ;;
+        5) stop_screensaver ;;
+        q|Q) exit 0 ;;
+        *) echo "Geçersiz seçim."; exit 1 ;;
+    esac
+}
+
+CMD="${1:-menu}"
+
+case "$CMD" in
+    art|aero|tablo)
+        start_screensaver "$CATALOG_DIR/aero_art.mp4" "Frutiger Aero Sanat Tablosu"
+        ;;
+    aquarium|akvaryum|aqua)
+        start_screensaver "$CATALOG_DIR/aquarium.mp4" "Tropikal Resif Akvaryumu"
+        ;;
+    fireplace|somine|fire)
+        start_screensaver "$CATALOG_DIR/fireplace.mp4" "Çıtırdayan Şömine Ateşi"
+        ;;
+    matrix|hacker)
+        start_screensaver "$CATALOG_DIR/matrix.mp4" "Matrix Siber Yağmur"
+        ;;
+    custom|play)
+        shift
+        start_screensaver "$1" "Özel Video ($1)"
+        ;;
+    stop|off|quit)
+        stop_screensaver
+        ;;
+    status)
+        show_status
+        ;;
+    list|ls)
+        show_list
+        ;;
+    clock)
+        VAL="${2:-true}"
+        [ "$VAL" = "on" ] && VAL="true"
+        [ "$VAL" = "off" ] && VAL="false"
+        set_config_bool "clock" "$VAL"
+        ;;
+    battery)
+        VAL="${2:-true}"
+        [ "$VAL" = "on" ] && VAL="true"
+        [ "$VAL" = "off" ] && VAL="false"
+        set_config_bool "show-battery-info" "$VAL"
+        ;;
+    menu|interactive)
+        interactive_menu
+        ;;
+    *)
+        echo "Kullanım:"
+        echo "  screensaver art               : Frutiger Aero Sanat Tablosu başlatır"
+        echo "  screensaver aquarium          : Tropikal Resif Akvaryumu başlatır"
+        echo "  screensaver fireplace         : Çıtırdayan Şömine başlatır"
+        echo "  screensaver matrix            : Matrix Siber Yağmur başlatır"
+        echo "  screensaver custom <dosya.mp4>: Özel video oynatır"
+        echo "  screensaver stop              : Ekran koruyucuyu durdurur"
+        echo "  screensaver status            : Aktif tema ve durumu gösterir"
+        echo "  screensaver list              : Tüm temaları listeler"
+        echo "  screensaver clock on|off      : Saat gösterimini açar/kapatır"
+        echo "  screensaver menu              : İnteraktif seçim menüsü açar"
+        exit 1
+        ;;
+esac

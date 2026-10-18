@@ -1,0 +1,44 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - Screen & Backlight Control Tool
+# ==============================================================================
+BRIGHT_FILE="/sys/class/backlight/panel/brightness"
+
+MODE="${1:-status}"
+VAL="${2:-180}"
+
+case "$MODE" in
+    on)
+        echo "$VAL" > "$BRIGHT_FILE" 2>/dev/null
+        /system/bin/am start -n jackpal.androidterm/.Term >/dev/null 2>&1 || true
+        echo "[Screen] Turned ON (Brightness: $VAL/255)."
+        ;;
+    off)
+        echo 0 > "$BRIGHT_FILE" 2>/dev/null
+        echo "[Screen] Turned OFF (Backlight disabled, server continues running)."
+        ;;
+    brightness|set)
+        if [ -z "$2" ]; then
+            echo "Usage: screen-ctrl brightness <0-255>"
+            exit 1
+        fi
+        echo "$2" > "$BRIGHT_FILE" 2>/dev/null
+        echo "[Screen] Brightness set to $2/255."
+        ;;
+    status)
+        CURR=$(cat "$BRIGHT_FILE" 2>/dev/null || echo "Unknown")
+        if [ "$CURR" = "0" ]; then
+            echo "[Screen Status] OFF (Backlight: 0)"
+        else
+            echo "[Screen Status] ON (Brightness: $CURR/255)"
+        fi
+        ;;
+    *)
+        echo "Usage:"
+        echo "  screen-ctrl on [0-255]         : Turn on display and bring terminal to front"
+        echo "  screen-ctrl off                : Turn off backlight to save power"
+        echo "  screen-ctrl brightness <0-255> : Set backlight brightness"
+        echo "  screen-ctrl status             : Show current screen status"
+        exit 1
+        ;;
+esac

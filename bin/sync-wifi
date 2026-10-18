@@ -1,0 +1,98 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - Host Wi-Fi Auto-Synchronizer
+# Automatically mirrors the PC's current Wi-Fi network credentials to the tablet
+# via ADB and updates ~/.ssh/config with the server tablet's live IP address.
+# ==============================================================================
+
+set -e
+
+# 1. Query PC's active Wi-Fi connection via NetworkManager
+ACTIVE_CONN=$(nmcli -t -f active,type,name connection show --active 2>/dev/null | grep '^yes:802-11-wireless:' | cut -d':' -f3- | head -n1 || true)
+if [ -z "$ACTIVE_CONN" ]; then
+    # PC is not connected to any Wi-Fi (e.g. Ethernet only, or offline)
+    exit 0
+fi
+
+# 2. Extract SSID, Security Key Management, and PSK password
+SSID=$(nmcli -s -g 802-11-wireless.ssid connection show "$ACTIVE_CONN" 2>/dev/null || true)
+[ -z "$SSID" ] && SSID="$ACTIVE_CONN"
+
+KEY_MGMT=$(nmcli -s -g 802-11-wireless-security.key-mgmt connection show "$ACTIVE_CONN" 2>/dev/null || true)
+PSK=$(nmcli -s -g 802-11-wireless-security.psk connection show "$ACTIVE_CONN" 2>/dev/null || true)
+
+if [ "$KEY_MGMT" = "wpa-psk" ] || [ -n "$PSK" ]; then
+    SEC_TYPE="WPA-PSK"
+else
+    SEC_TYPE="NONE"
+fi
+
+# 3. Iterate over attached ADB devices
+for DEV in $(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}'); do
+    MODEL=$(adb -s "$DEV" shell "getprop ro.product.model" 2>/dev/null | tr -d '\r\n')
+    
+    # Ignore smartphones
+    if [[ "$MODEL" =~ "SM-G"|"SM-S"|"SM-A"|"iPhone" ]]; then
+        continue
+    fi
+
+    # Check root capability
+    HAS_SU=$(adb -s "$DEV" shell "su -c 'echo root_ok'" 2>/dev/null | tr -d '\r\n' || true)
+
+    if [ "$HAS_SU" = "root_ok" ]; then
+        # Device is Rooted (e.g. Samsung SM-T210 Server)
+        CURRENT_TABLET_SSID=$(adb -s "$DEV" shell "su -c 'dumpsys wifi | grep \"state: CONNECTED\"'" 2>/dev/null | grep -o 'extra: "[^"]*"' | cut -d'"' -f2 || true)
+
+        if [ "$CURRENT_TABLET_SSID" != "$SSID" ]; then
+            echo "[Wi-Fi Sync] PC is on '$SSID'. Syncing Wi-Fi credentials to $MODEL ($DEV)..."
+
+            TABLET_CONF=$(adb -s "$DEV" shell "su -c 'cat /data/misc/wifi/wpa_supplicant.conf'" 2>/dev/null || true)
+            if [ -n "$TABLET_CONF" ]; then
+                NEW_CONF=$(python3 -c "
+import sys, re
+conf = sys.stdin.read()
+ssid = sys.argv[1]
+psk = sys.argv[2]
+mgmt = sys.argv[3]
+pattern = r'network=\{[^{}]*?ssid=\"' + re.escape(ssid) + r'\"[^{}]*?\}'
+
+if mgmt == 'WPA-PSK':
+    block = f'''network={{\n\tssid=\"{ssid}\"\n\tpsk=\"{psk}\"\n\tkey_mgmt=WPA-PSK\n\tpriority=10\n}}'''
+else:
+    block = f'''network={{\n\tssid=\"{ssid}\"\n\tkey_mgmt=NONE\n\tpriority=10\n}}'''
+
+if re.search(pattern, conf, re.DOTALL):
+    conf = re.sub(pattern, block, conf, flags=re.DOTALL)
+else:
+    conf = conf.strip() + '\n\n' + block + '\n'
+
+sys.stdout.write(conf)
+" "$SSID" "$PSK" "$SEC_TYPE" <<< "$TABLET_CONF")
+
+                TMP_CONF="/tmp/tablet_wpa_sync.conf"
+                printf "%s\n" "$NEW_CONF" > "$TMP_CONF"
+                adb -s "$DEV" push "$TMP_CONF" /data/local/tmp/wpa_supplicant.conf >/dev/null 2>&1
+                rm -f "$TMP_CONF"
+
+                adb -s "$DEV" shell "su -c 'cp /data/local/tmp/wpa_supplicant.conf /data/misc/wifi/wpa_supplicant.conf && chown wifi:wifi /data/misc/wifi/wpa_supplicant.conf && chmod 660 /data/misc/wifi/wpa_supplicant.conf && rm /data/local/tmp/wpa_supplicant.conf && svc wifi disable && sleep 1 && svc wifi enable'" >/dev/null 2>&1
+                sleep 4
+            fi
+        fi
+
+        TABLET_IP=$(adb -s "$DEV" shell "su -c 'ip -4 addr show wlan0 2>/dev/null || ifconfig wlan0 2>/dev/null'" | grep -oE "inet [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}' | head -n1 || true)
+        if [ -n "$TABLET_IP" ]; then
+            SSH_CFG="$HOME/.ssh/config"
+            if [ -f "$SSH_CFG" ] && grep -q "Host my-tablet-server" "$SSH_CFG"; then
+                sed -i "/Host my-tablet-server/,/Host / s/HostName [0-9.]\+/HostName $TABLET_IP/" "$SSH_CFG"
+            fi
+            echo "[Wi-Fi Sync] Sunucu Tablet ($MODEL) Wi-Fi bağlı: $TABLET_IP (Ağ: $SSID)"
+        fi
+
+    else
+        # Device is Unrooted Stock (e.g. Vestel V Tab 7 Lite II)
+        CURRENT_IP=$(adb -s "$DEV" shell "netcfg" 2>/dev/null | grep -E "^wlan0\s+UP" | awk '{print $3}' | cut -d'/' -f1 || true)
+        if [ -n "$CURRENT_IP" ] && [ "$CURRENT_IP" != "0.0.0.0" ]; then
+            echo "[Wi-Fi Sync] İkinci Ekran Tableti ($MODEL) Wi-Fi bağlı: $CURRENT_IP (Ağ: $SSID)"
+        fi
+    fi
+done
