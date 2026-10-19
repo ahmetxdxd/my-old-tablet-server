@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=CAVA Audio Visualizer
+Comment=Launch live audio frequency spectrum visualizer in terminal
+Exec=bash -c '"$(dirname "%k")/.run_silent.sh" "cava" "CAVA Spectrum" "Opening CAVA audio spectrum..."'
+Icon=multimedia-player
+Terminal=true
+Categories=Utility;System;
+StartupNotify=true

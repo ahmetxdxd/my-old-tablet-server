@@ -155,25 +155,30 @@ tablet debloat
 tablet screen off        # Turn off LCD backlight for power saving
 tablet <any-command>     # Executes directly inside tablet Linux
 ```
-### 🖱️ 4. Çift Tıklanabilir Kısayollar (Terminal Görmeden Tek Tıkla!)
-Hiçbir terminal penceresi veya siyah konsol ekranı görmeden işlemleri başlatmak için **[`kısa yollar/`](kısa%20yollar)** klasörünü kullanabilirsiniz!
+### 🖱️ 4. One-Click Desktop Shortcuts (Zero Terminal Window)
+To trigger actions without opening or seeing any terminal window, use the **[`shortcuts/`](shortcuts)** folder!
 
-* **🐧 Linux / macOS:** [`kısa yollar/`](kısa%20yollar) klasöründeki `.desktop` veya `.sh` dosyalarına çift tıklayın. Hiçbir terminal penceresi açılmaz; sistem işlemi arka planda başlatır ve sağ alt köşede masaüstü bildirimi (`notify-send`) çıkarır (Örn: `01-ikinci-ekran-usb.desktop`).
-* **🪟 Windows:** [`kısa yollar/`](kısa%20yollar) klasöründeki `.bat` dosyalarına çift tıklayın. Siyah konsol penceresi görünmeden arka planda çalışır.
+* **🐧 On Linux & macOS:** Double-click any `.desktop` or `.sh` file inside the [`shortcuts/`](shortcuts) folder. No terminal window will appear; the task starts silently in the background and pops up a desktop notification (`notify-send`) (e.g. `01-second-screen-usb.desktop`).
+* **🪟 On Windows:** Double-click any `.bat` file in [`shortcuts/`](shortcuts). It runs silently in the background without opening a command prompt window (`-WindowStyle Hidden`).
 
-| Kısayol | Çift Tıklandığında Ne Yapar? |
+| Shortcut | Action on Double-Click |
 | :--- | :--- |
-| `01-ikinci-ekran-usb` | **Terminal görmeden tableti USB kablolu PC ikinci ekranı yapar!** |
-| `02-ikinci-ekran-wifi` | Terminal görmeden tableti kablosuz Wi-Fi PC ikinci ekranı yapar |
-| `03-ikinci-ekran-kapat` | İkinci ekranı kapatır ve tableti normal arayüzüne döndürür |
-| `04-stereo-hoparlor-baslat` | PC sesini sol/sağ kanal olarak tablet hoparlörlerine aktarır |
-| `05-stereo-hoparlor-kapat` | Stereo hoparlör ses akışını durdurur |
-| `07-ekran-koruyucu-frutiger-aero` | Frutiger Aero estetik görsel döngüsünü başlatır |
-| `08-ekran-koruyucu-akvaryum` | Tropikal mercan resifi canlı akvaryumunu başlatır |
-| `09-ekran-koruyucu-somine` | Huzurlu şömine odun ateşi döngüsünü başlatır |
-| `10-ekran-koruyucu-matrix` | Siber kod akışını başlatır |
-| `14-tablet-temizle-debloat` | 60+ bloatware servisini dondurur ve RAM temizler |
-| `15-ekran-isigi-ac` / `16-kapat` | Tablet ekran aydınlatmasını anında açar / kapatır |
+| `01-second-screen-usb` | **Instantly turns tablet into PC second monitor via USB (no terminal window!)** |
+| `02-second-screen-wifi` | Turns tablet into wireless second monitor over home Wi-Fi |
+| `03-second-screen-stop` | Closes second monitor and restores tablet home launcher |
+| `04-stereo-speakers-start` | Streams PC stereo audio (Left & Right channel split) to tablet speakers |
+| `05-stereo-speakers-stop` | Stops tablet stereo speaker stream |
+| `06-cava-audio-visualizer` | Opens live CAVA audio frequency spectrum in a clean terminal |
+| `07-screensaver-frutiger-aero` | Starts glossy nostalgic Frutiger Aero dynamic art slideshow |
+| `08-screensaver-aquarium` | Starts tropical coral reef live aquarium video loop |
+| `09-screensaver-fireplace` | Starts cozy burning fireplace video loop |
+| `10-screensaver-matrix` | Starts cyber green Matrix digital rain |
+| `12-anime-app` | Opens AnimeDLR ad-free anime streaming app |
+| `13-lofi-radio` | Streams 24/7 chill lofi hip hop beats |
+| `14-safe-debloat` | Safely freezes 60+ bloatware packages and recovers up to 70% RAM |
+| `15-screen-light-on` / `16-off` | Turns tablet LCD backlight on or off |
+| `20-tablet-menu` | **Opens the full interactive Quick Control Menu (tablet-menu)** |
+| `21-tablet-terminal` | **Connects directly to live tablet Linux console (tablet-terminal)** |
 
 ---
 

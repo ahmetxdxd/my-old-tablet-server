@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Screensaver - Frutiger Aero
+Comment=Start glossy nostalgic Frutiger Aero dynamic art slideshow
+Exec=bash -c '"$(dirname "%k")/.run_silent.sh" "screensaver art" "Screensaver" "Frutiger Aero slideshow started."'
+Icon=preferences-desktop-screensaver
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Stop Second Screen
+Comment=Detach second monitor session and restore normal tablet
+Exec=bash -c '"$(dirname "%k")/.run_silent.sh" "second-screen-stop" "Second Screen Stopped" "Second screen session closed."'
+Icon=process-stop
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true

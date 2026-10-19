@@ -107,10 +107,11 @@ tablet <command>               # Run any README command without entering tablet
 ```
 *(On Windows: use `tablet.bat <command>`)*
 
-### 🖱️ 4. Double-Click Desktop Shortcuts (Zero Terminal Window)
-Use the **`kısa yollar/`** folder to trigger any feature without seeing a terminal window:
-- **Linux/macOS:** Double-click `.desktop` or `.sh` files (e.g. `01-ikinci-ekran-usb.desktop`) for background execution with desktop notifications (`notify-send`).
+### 🖱️ 4. One-Click Desktop Shortcuts (Zero Terminal Window)
+Use the **`shortcuts/`** folder to trigger any feature without seeing a terminal window:
+- **Linux/macOS:** Double-click `.desktop` or `.sh` files (e.g. `01-second-screen-usb.desktop`) for background execution with desktop notifications (`notify-send`).
 - **Windows:** Double-click `.bat` files for windowless background execution.
+- Contains all tools including `tablet-menu` and `tablet-terminal`!
 
 ---
 

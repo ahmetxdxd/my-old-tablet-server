@@ -52,7 +52,7 @@ function Run-OnTablet([string]$cmd) {
         return $LASTEXITCODE
     }
 
-    Write-Color "[HATA] Tablete bağlanılamadı! Lütfen USB kablosunu takın veya Wi-Fi ağını kontrol edin." Red
+    Write-Color "[ERROR] Failed to connect to tablet! Please connect USB cable or check Wi-Fi network." Red
     return 1
 }
 
@@ -62,7 +62,7 @@ if ($args.Count -eq 0) {
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $menuScript
         exit $LASTEXITCODE
     } else {
-        Write-Color "[HATA] tablet-menu.ps1 bulunamadı!" Red
+        Write-Color "[ERROR] tablet-menu.ps1 not found!" Red
         exit 1
     }
 }
@@ -91,23 +91,23 @@ switch -regex ($action) {
     }
     "^(help|--help|-h)$" {
         Write-Color "======================================================" Cyan
-        Write-Color "          📱 MY TABLET SERVER - KULLANIM KILAVUZU      " Cyan
+        Write-Color "          📱 MY TABLET SERVER - CLI USER GUIDE        " Cyan
         Write-Color "======================================================" Cyan
-        Write-Host "Kullanım:"
-        Write-Host "  tablet                      : Hızlı Kontrol Menüsünü açar" -ForegroundColor Green
-        Write-Host "  tablet terminal             : Tablet terminaline doğrudan bağlanır" -ForegroundColor Green
-        Write-Host "  tablet status               : Tablet donanım ve batarya durumunu gösterir" -ForegroundColor Green
-        Write-Host "  tablet <komut>              : README komutunu tablet terminaline girmeden çalıştırır" -ForegroundColor Green
+        Write-Host "Usage:"
+        Write-Host "  tablet                      : Open interactive Quick Control Menu" -ForegroundColor Green
+        Write-Host "  tablet terminal             : Connect directly to live tablet terminal" -ForegroundColor Green
+        Write-Host "  tablet status               : View tablet CPU temp, RAM, battery & IP" -ForegroundColor Green
+        Write-Host "  tablet <command>            : Execute README command directly on tablet" -ForegroundColor Green
         Write-Host ""
-        Write-Host "Örnek Komutlar:"
-        Write-Host "  tablet screensaver art      : Frutiger Aero ekran koruyucuyu açar"
-        Write-Host "  tablet screensaver aquarium : Akvaryum modunu açar"
-        Write-Host "  tablet second-screen usb    : Tableti USB ikinci monitör yapar"
-        Write-Host "  tablet stereo-speakers start: PC stereo hoparlörünü başlatır"
-        Write-Host "  tablet anime app            : Anime uygulamasını açar"
-        Write-Host "  tablet debloat              : Gereksiz arka plan uygulamalarını temizler"
-        Write-Host "  tablet screen off           : Tablet ekran ışığını kapatır"
-        Write-Host "  tablet screen on            : Tablet ekran ışığını açar"
+        Write-Host "Example Commands:"
+        Write-Host "  tablet screensaver art      : Start Frutiger Aero screensaver"
+        Write-Host "  tablet screensaver aquarium : Start Coral Reef Aquarium screensaver"
+        Write-Host "  tablet second-screen usb    : Turn tablet into PC second display via USB"
+        Write-Host "  tablet stereo-speakers start: Stream PC audio to tablet speakers"
+        Write-Host "  tablet anime app            : Open AnimeDLR streaming app"
+        Write-Host "  tablet debloat              : Clean up 60+ background services"
+        Write-Host "  tablet screen off           : Turn off screen backlight (power saving)"
+        Write-Host "  tablet screen on            : Turn on screen backlight"
         Write-Color "======================================================" Cyan
         exit 0
     }

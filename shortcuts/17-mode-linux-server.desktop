@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Mode: Pure Linux Server
+Comment=Headless mode: Screen off, GUI stopped, maximum RAM for Linux
+Exec=bash -c '"$(dirname "%k")/.run_silent.sh" "my-tablet-server linux" "Operating Mode" "Switched to Pure Linux Server mode."'
+Icon=server
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true

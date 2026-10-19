@@ -18,7 +18,7 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 echo -e "${BLUE}${BOLD}======================================================${NC}"
-echo -e "${BLUE}${BOLD}       📱 MY TABLET SERVER - HIZLI TERMİNAL           ${NC}"
+echo -e "${BLUE}${BOLD}       📱 MY TABLET SERVER - QUICK TERMINAL           ${NC}"
 echo -e "${BLUE}${BOLD}======================================================${NC}"
 
 # Check for manual IP argument
@@ -28,16 +28,16 @@ TARGET_IP="$1"
 ADB_DEVICE=$(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1 || true)
 
 if [ -n "$ADB_DEVICE" ]; then
-    echo -e "${GREEN}✓ USB üzerinden tablet tespit edildi (${ADB_DEVICE})${NC}"
+    echo -e "${GREEN}✓ Tablet detected via USB (${ADB_DEVICE})${NC}"
     adb forward tcp:2222 tcp:22 2>/dev/null || true
 
     # Try quick SSH check over forwarded port 2222
     if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -p 2222 -q root@127.0.0.1 "exit" 2>/dev/null; then
-        echo -e "${BLUE}--> Canlı konsola bağlanılıyor (USB SSH :2222)...${NC}\n"
+        echo -e "${BLUE}--> Connecting to live console (USB SSH :2222)...${NC}\n"
         exec ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 -t root@127.0.0.1 "console 2>/dev/null || tmux attach -t console 2>/dev/null || /bin/bash 2>/dev/null || /bin/sh"
     else
         # If SSH key / daemon is not ready, use direct ADB chroot console fallback
-        echo -e "${YELLOW}--> ADB doğrudan chroot konsoluna bağlanılıyor...${NC}\n"
+        echo -e "${YELLOW}--> Connecting via direct ADB chroot console fallback...${NC}\n"
         exec adb -s "$ADB_DEVICE" shell "su -c '
             L=/data/local/linux/lib/ld-musl-armhf.so.1
             B=/data/local/linux/bin/busybox
@@ -62,16 +62,16 @@ if [ -z "$TARGET_IP" ]; then
 fi
 
 if [ -n "$TARGET_IP" ]; then
-    echo -e "${GREEN}✓ Wi-Fi IP tespit edildi: ${TARGET_IP}${NC}"
-    echo -e "${BLUE}--> Canlı konsola bağlanılıyor (Wi-Fi SSH)...${NC}\n"
+    echo -e "${GREEN}✓ Tablet Wi-Fi IP detected: ${TARGET_IP}${NC}"
+    echo -e "${BLUE}--> Connecting to live console (Wi-Fi SSH)...${NC}\n"
     exec ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -t "root@${TARGET_IP}" "console 2>/dev/null || tmux attach -t console 2>/dev/null || /bin/bash 2>/dev/null || /bin/sh"
 fi
 
 # 3. No connection found
-echo -e "${RED}[UYARI] Tablet bağlantısı bulunamadı!${NC}"
-echo -e "Lütfen aşağıdakilerden birini yapın:"
-echo -e "  1. ${YELLOW}USB Kablosu:${NC} Tableti USB ile bilgisayara bağlayın (USB Hata Ayıklama açık olmalı)."
-echo -e "  2. ${YELLOW}Wi-Fi Bağlantısı:${NC} Tableti PC ile aynı Wi-Fi ağına bağlayın."
-echo -e "  3. ${YELLOW}Manuel IP:${NC} tablet-terminal <TABLET_IP> şeklinde IP belirterek bağlanın."
+echo -e "${RED}[WARNING] Tablet connection not found!${NC}"
+echo -e "Please ensure one of the following:"
+echo -e "  1. ${YELLOW}USB Cable:${NC} Connect tablet via USB (ensure USB Debugging is enabled)."
+echo -e "  2. ${YELLOW}Wi-Fi Network:${NC} Connect tablet to the same Wi-Fi network as this PC."
+echo -e "  3. ${YELLOW}Manual IP:${NC} Run 'tablet-terminal <TABLET_IP>' with your tablet's IP address."
 echo -e "${BLUE}======================================================${NC}"
 exit 1

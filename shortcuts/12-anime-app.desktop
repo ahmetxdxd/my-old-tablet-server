@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Open AnimeDLR App
+Comment=Launch ad-free AnimeDLR streaming application on tablet
+Exec=bash -c '"$(dirname "%k")/.run_silent.sh" "anime app" "Anime Player" "Launching AnimeDLR app..."'
+Icon=applications-multimedia
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true

@@ -19,7 +19,7 @@ function Write-Color([string]$text, [ConsoleColor]$color) {
 }
 
 Write-Color "======================================================" Cyan
-Write-Color "       📱 MY TABLET SERVER - HIZLI TERMİNAL           " Cyan
+Write-Color "       📱 MY TABLET SERVER - QUICK TERMINAL           " Cyan
 Write-Color "======================================================" Cyan
 
 $targetIp = $args[0]
@@ -28,7 +28,7 @@ $targetIp = $args[0]
 $devices = adb devices 2>$null | Select-String -Pattern "device$" | ForEach-Object { $_.Line.Split("`t")[0].Trim() }
 if ($devices) {
     $deviceId = $devices[0]
-    Write-Color "✓ USB üzerinden tablet tespit edildi ($deviceId)" Green
+    Write-Color "✓ Tablet detected via USB ($deviceId)" Green
 
     adb forward tcp:2222 tcp:22 2>$null | Out-Null
 
@@ -44,11 +44,11 @@ if ($devices) {
     }
 
     if ($sshCheck) {
-        Write-Color "--> Canlı konsola bağlanılıyor (USB SSH :2222)...`n" Blue
+        Write-Color "--> Connecting to live console (USB SSH :2222)...`n" Blue
         & ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 -t root@127.0.0.1 "console 2>/dev/null || tmux attach -t console 2>/dev/null || /bin/bash 2>/dev/null || /bin/sh"
         exit $LASTEXITCODE
     } else {
-        Write-Color "--> ADB doğrudan chroot konsoluna bağlanılıyor...`n" Yellow
+        Write-Color "--> Connecting via direct ADB chroot console fallback...`n" Yellow
         & adb -s $deviceId shell "su -c 'L=/data/local/linux/lib/ld-musl-armhf.so.1; B=/data/local/linux/bin/busybox; R=/data/local/linux; if [ -f `$R/enter.sh ]; then sh `$R/enter.sh; elif [ -f `$R/bin/bash ]; then `$L `$B chroot `$R /bin/bash; else `$L `$B chroot `$R /bin/sh; fi'"
         exit $LASTEXITCODE
     }
@@ -67,17 +67,17 @@ if (-not $targetIp) {
 }
 
 if ($targetIp) {
-    Write-Color "✓ Wi-Fi IP tespit edildi: $targetIp" Green
-    Write-Color "--> Canlı konsola bağlanılıyor (Wi-Fi SSH)...`n" Blue
+    Write-Color "✓ Tablet Wi-Fi IP detected: $targetIp" Green
+    Write-Color "--> Connecting to live console (Wi-Fi SSH)...`n" Blue
     & ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -t "root@$targetIp" "console 2>/dev/null || tmux attach -t console 2>/dev/null || /bin/bash 2>/dev/null || /bin/sh"
     exit $LASTEXITCODE
 }
 
 # 3. No connection found
-Write-Color "[UYARI] Tablet bağlantısı bulunamadı!" Red
-Write-Host "Lütfen aşağıdakilerden birini yapın:"
-Write-Host "  1. USB Kablosu: Tableti USB ile bilgisayara bağlayın (USB Hata Ayıklama açık olmalı)." -ForegroundColor Yellow
-Write-Host "  2. Wi-Fi Bağlantısı: Tableti PC ile aynı Wi-Fi ağına bağlayın." -ForegroundColor Yellow
-Write-Host "  3. Manuel IP: powershell -File bin\tablet-terminal.ps1 <TABLET_IP>" -ForegroundColor Yellow
+Write-Color "[WARNING] Tablet connection not found!" Red
+Write-Host "Please ensure one of the following:"
+Write-Host "  1. USB Cable: Connect tablet via USB (ensure USB Debugging is enabled)." -ForegroundColor Yellow
+Write-Host "  2. Wi-Fi Network: Connect tablet to the same Wi-Fi network as this PC." -ForegroundColor Yellow
+Write-Host "  3. Manual IP: powershell -File bin\tablet-terminal.ps1 <TABLET_IP>" -ForegroundColor Yellow
 Write-Color "======================================================" Cyan
 exit 1

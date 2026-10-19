@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=💻 Live Tablet Terminal (SSH)
+Comment=Connect directly to live tablet Linux console without SSH flags
+Exec=bash -c '"$(dirname "%k")/.run_silent.sh" "tablet-terminal" "Tablet Terminal" "Connecting to tablet terminal..."'
+Icon=utilities-terminal
+Terminal=true
+Categories=Utility;System;
+StartupNotify=true

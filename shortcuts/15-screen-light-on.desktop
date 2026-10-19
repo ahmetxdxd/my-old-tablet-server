@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Turn Screen Light ON
+Comment=Turn on tablet LCD backlight
+Exec=bash -c '"$(dirname "%k")/.run_silent.sh" "screen on" "Screen Backlight" "Screen backlight turned ON."'
+Icon=display-brightness
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true

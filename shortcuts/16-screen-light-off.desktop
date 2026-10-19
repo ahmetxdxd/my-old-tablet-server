@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Turn Screen Light OFF
+Comment=Turn off tablet LCD backlight to save power (services keep running)
+Exec=bash -c '"$(dirname "%k")/.run_silent.sh" "screen off" "Screen Backlight" "Screen backlight turned OFF."'
+Icon=display-brightness-off
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true

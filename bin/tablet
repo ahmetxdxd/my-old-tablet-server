@@ -66,7 +66,7 @@ run_on_tablet() {
         return $?
     fi
 
-    echo -e "${RED}[HATA] Tablete bağlanılamadı! Lütfen USB kablosunu takın veya Wi-Fi ağını kontrol edin.${NC}"
+    echo -e "${RED}[ERROR] Failed to connect to tablet! Please connect USB cable or check Wi-Fi network.${NC}"
     return 1
 }
 
@@ -75,7 +75,7 @@ if [ $# -eq 0 ]; then
     if [ -f "$DIR/tablet-menu" ]; then
         exec "$DIR/tablet-menu"
     else
-        echo -e "${RED}[HATA] tablet-menu bulunamadı!${NC}"
+        echo -e "${RED}[ERROR] tablet-menu script not found!${NC}"
         exit 1
     fi
 fi
@@ -100,24 +100,24 @@ case "$ACTION" in
         ;;
     help|--help|-h)
         echo -e "${BLUE}${BOLD}======================================================${NC}"
-        echo -e "${BLUE}${BOLD}          📱 MY TABLET SERVER - KULLANIM KILAVUZU      ${NC}"
+        echo -e "${BLUE}${BOLD}          📱 MY TABLET SERVER - CLI USER GUIDE        ${NC}"
         echo -e "${BLUE}${BOLD}======================================================${NC}"
-        echo -e "Kullanım:"
-        echo -e "  ${GREEN}tablet${NC}                      : Hızlı Kontrol Menüsünü açar"
-        echo -e "  ${GREEN}tablet terminal${NC}             : Tablet terminaline doğrudan bağlanır"
-        echo -e "  ${GREEN}tablet status${NC}               : Tablet donanım ve batarya durumunu gösterir"
-        echo -e "  ${GREEN}tablet <komut>${NC}              : README komutunu tablet terminaline girmeden çalıştırır"
+        echo -e "Usage:"
+        echo -e "  ${GREEN}tablet${NC}                      : Open interactive Quick Control Menu"
+        echo -e "  ${GREEN}tablet terminal${NC}             : Connect directly to live tablet terminal"
+        echo -e "  ${GREEN}tablet status${NC}               : View tablet CPU temp, RAM, battery & IP"
+        echo -e "  ${GREEN}tablet <command>${NC}            : Execute README command directly on tablet"
         echo -e ""
-        echo -e "Örnek Komutlar (Tablete girmeden çalıştırabilirsiniz):"
-        echo -e "  tablet screensaver art      : Frutiger Aero ekran koruyucuyu açar"
-        echo -e "  tablet screensaver aquarium : Akvaryum modunu açar"
-        echo -e "  tablet second-screen usb    : Tableti USB ikinci monitör yapar"
-        echo -e "  tablet stereo-speakers start: PC stereo hoparlörünü başlatır"
-        echo -e "  tablet anime app            : Anime uygulamasını açar"
-        echo -e "  tablet debloat              : Gereksiz arka plan uygulamalarını temizler"
-        echo -e "  tablet screen off           : Tablet ekran ışığını kapatır (enerji tasarrufu)"
-        echo -e "  tablet screen on            : Tablet ekran ışığını açar"
-        echo -e "  tablet radio lofi           : Lofi radyo akışı başlatır"
+        echo -e "Example Commands (Execute without entering tablet):"
+        echo -e "  tablet screensaver art      : Start Frutiger Aero screensaver"
+        echo -e "  tablet screensaver aquarium : Start Coral Reef Aquarium screensaver"
+        echo -e "  tablet second-screen usb    : Turn tablet into PC second display via USB"
+        echo -e "  tablet stereo-speakers start: Stream PC audio to tablet speakers"
+        echo -e "  tablet anime app            : Open AnimeDLR streaming app"
+        echo -e "  tablet debloat              : Clean up 60+ background services"
+        echo -e "  tablet screen off           : Turn off screen backlight (power saving)"
+        echo -e "  tablet screen on            : Turn on screen backlight"
+        echo -e "  tablet radio lofi           : Stream live lofi hip hop radio"
         echo -e "${BLUE}======================================================${NC}"
         ;;
     *)
