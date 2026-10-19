@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Hızlı Kontrol Menüsü
+Comment=Tüm fonksiyonları içeren interaktif terminal menüsünü açar
+Exec=bash -c '"$(dirname "%k")/.run_silent.sh" "tablet-menu" "Kontrol Menüsü" "Hızlı Kontrol Menüsü açılıyor..."'
+Icon=utilities-terminal
+Terminal=true
+Categories=Utility;System;
+StartupNotify=true

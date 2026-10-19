@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Tablet Ekran Işığını Kapat
+Comment=Tablet ekranını kapatır (arka planda çalışmaya devam eder)
+Exec=bash -c '"$(dirname "%k")/.run_silent.sh" "screen off" "Ekran Işığı" "Ekran ışığı kapatıldı."'
+Icon=display-brightness-off
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true

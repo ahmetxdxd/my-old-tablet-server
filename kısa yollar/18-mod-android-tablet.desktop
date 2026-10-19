@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Mod: Saf Android Tablet
+Comment=Normal tablet arayüzü ve uygulamaları etkinleştirilir
+Exec=bash -c '"$(dirname "%k")/.run_silent.sh" "my-tablet-server android" "Sistem Modu" "Android Tablet moduna geçildi."'
+Icon=tablet
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Stereo Hoparlörleri Başlat
+Comment=PC sesini sol/sağ kanal olarak tablet hoparlörlerine aktarır
+Exec=bash -c '"$(dirname "%k")/.run_silent.sh" "stereo-speakers-start" "Stereo Hoparlörler" "Tablet stereo hoparlör akışı başlatılıyor..."'
+Icon=audio-speakers
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true

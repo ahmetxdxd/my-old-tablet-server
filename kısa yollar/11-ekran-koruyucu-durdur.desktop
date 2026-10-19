@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Ekran Koruyucuyu Durdur
+Comment=Ekran koruyucuyu durdurur ve masaüstüne döner
+Exec=bash -c '"$(dirname "%k")/.run_silent.sh" "screensaver stop" "Ekran Koruyucu" "Ekran koruyucu durduruldu."'
+Icon=media-playback-stop
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true

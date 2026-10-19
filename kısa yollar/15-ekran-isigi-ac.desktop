@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Tablet Ekran Işığını Aç
+Comment=Tablet LCD panel aydınlatmasını açar
+Exec=bash -c '"$(dirname "%k")/.run_silent.sh" "screen on" "Ekran Işığı" "Ekran ışığı açıldı."'
+Icon=display-brightness
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true

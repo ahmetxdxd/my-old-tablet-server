@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Lofi İnternet Radyosu
+Comment=Tablette 24/7 kesintisiz lofi beats radyo akışını başlatır
+Exec=bash -c '"$(dirname "%k")/.run_silent.sh" "radio lofi" "İnternet Radyosu" "Lofi radyo akışı başlatılıyor..."'
+Icon=audio-radio
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true

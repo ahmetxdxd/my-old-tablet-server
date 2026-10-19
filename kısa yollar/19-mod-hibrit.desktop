@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Mod: Hibrit Mod
+Comment=Android saat ve arayüz açıkken Linux servisleri arka planda çalışır
+Exec=bash -c '"$(dirname "%k")/.run_silent.sh" "my-tablet-server hybrid" "Sistem Modu" "Hibrit moda geçildi."'
+Icon=view-refresh
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true

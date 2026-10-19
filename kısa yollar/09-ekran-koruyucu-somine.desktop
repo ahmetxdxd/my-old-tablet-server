@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Ekran Koruyucu - Şömine
+Comment=Tablette huzurlu şömine odun ateşi döngüsünü başlatır
+Exec=bash -c '"$(dirname "%k")/.run_silent.sh" "screensaver fireplace" "Ekran Koruyucu" "Şömine döngüsü başlatıldı."'
+Icon=preferences-desktop-screensaver
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true

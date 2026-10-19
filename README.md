@@ -155,7 +155,25 @@ tablet debloat
 tablet screen off        # Turn off LCD backlight for power saving
 tablet <any-command>     # Executes directly inside tablet Linux
 ```
-*(On Windows: use `tablet.bat <command>`, e.g., `tablet.bat status`)*
+### 🖱️ 4. Çift Tıklanabilir Kısayollar (Terminal Görmeden Tek Tıkla!)
+Hiçbir terminal penceresi veya siyah konsol ekranı görmeden işlemleri başlatmak için **[`kısa yollar/`](kısa%20yollar)** klasörünü kullanabilirsiniz!
+
+* **🐧 Linux / macOS:** [`kısa yollar/`](kısa%20yollar) klasöründeki `.desktop` veya `.sh` dosyalarına çift tıklayın. Hiçbir terminal penceresi açılmaz; sistem işlemi arka planda başlatır ve sağ alt köşede masaüstü bildirimi (`notify-send`) çıkarır (Örn: `01-ikinci-ekran-usb.desktop`).
+* **🪟 Windows:** [`kısa yollar/`](kısa%20yollar) klasöründeki `.bat` dosyalarına çift tıklayın. Siyah konsol penceresi görünmeden arka planda çalışır.
+
+| Kısayol | Çift Tıklandığında Ne Yapar? |
+| :--- | :--- |
+| `01-ikinci-ekran-usb` | **Terminal görmeden tableti USB kablolu PC ikinci ekranı yapar!** |
+| `02-ikinci-ekran-wifi` | Terminal görmeden tableti kablosuz Wi-Fi PC ikinci ekranı yapar |
+| `03-ikinci-ekran-kapat` | İkinci ekranı kapatır ve tableti normal arayüzüne döndürür |
+| `04-stereo-hoparlor-baslat` | PC sesini sol/sağ kanal olarak tablet hoparlörlerine aktarır |
+| `05-stereo-hoparlor-kapat` | Stereo hoparlör ses akışını durdurur |
+| `07-ekran-koruyucu-frutiger-aero` | Frutiger Aero estetik görsel döngüsünü başlatır |
+| `08-ekran-koruyucu-akvaryum` | Tropikal mercan resifi canlı akvaryumunu başlatır |
+| `09-ekran-koruyucu-somine` | Huzurlu şömine odun ateşi döngüsünü başlatır |
+| `10-ekran-koruyucu-matrix` | Siber kod akışını başlatır |
+| `14-tablet-temizle-debloat` | 60+ bloatware servisini dondurur ve RAM temizler |
+| `15-ekran-isigi-ac` / `16-kapat` | Tablet ekran aydınlatmasını anında açar / kapatır |
 
 ---
 

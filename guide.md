@@ -107,6 +107,11 @@ tablet <command>               # Run any README command without entering tablet
 ```
 *(On Windows: use `tablet.bat <command>`)*
 
+### 🖱️ 4. Double-Click Desktop Shortcuts (Zero Terminal Window)
+Use the **`kısa yollar/`** folder to trigger any feature without seeing a terminal window:
+- **Linux/macOS:** Double-click `.desktop` or `.sh` files (e.g. `01-ikinci-ekran-usb.desktop`) for background execution with desktop notifications (`notify-send`).
+- **Windows:** Double-click `.bat` files for windowless background execution.
+
 ---
 
 ## 5. Three Core Operating Modes (Linux, Android, Hybrid)

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=İkinci Ekran Başlat (Wi-Fi)
+Comment=Tableti kablosuz Wi-Fi üzerinden PC ikinci ekranı yapar
+Exec=bash -c '"$(dirname "%k")/.run_silent.sh" "second-screen-wifi" "İkinci Ekran (Wi-Fi)" "Tablet Wi-Fi ikinci ekran olarak başlatılıyor..."'
+Icon=network-wireless
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true

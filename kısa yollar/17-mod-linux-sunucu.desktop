@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Mod: Saf Linux Sunucu
+Comment=Ekran kapalı, maksimum RAM Linux servislerine ayrılır
+Exec=bash -c '"$(dirname "%k")/.run_silent.sh" "my-tablet-server linux" "Sistem Modu" "Saf Linux Sunucu moduna geçildi."'
+Icon=server
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true
