@@ -1,0 +1,195 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - Interactive Terminal Quick Menu
+# ==============================================================================
+# Allows running all README commands without entering the tablet terminal.
+# ==============================================================================
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Colors
+GREEN='\033[01;32m'
+BLUE='\033[01;34m'
+YELLOW='\033[01;33m'
+CYAN='\033[01;36m'
+RED='\033[01;31m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+pause() {
+    echo ""
+    read -rp "Menüye dönmek için [Enter] tuşuna basın..."
+}
+
+run_cmd() {
+    echo -e "\n${BLUE}--> Komut çalıştırılıyor: ${YELLOW}$*${NC}\n"
+    "$DIR/tablet" run "$@"
+    pause
+}
+
+while true; do
+    clear
+    echo -e "${CYAN}${BOLD}"
+    cat << 'BANNER'
+  __  __         _______     _     _      _      _____                          
+ |  \/  |       |__   __|   | |   | |    | |    / ____|                         
+ | \  / |_   _     | | __ _ | |__ | | ___| |_  | (___   ___ _ ____   _____ _ __ 
+ | |\/| | | | |    | |/ _` || '_ \| |/ _ \ __|  \___ \ / _ \ '__\ \ / / _ \ '__|
+ | |  | | |_| |    | | (_| || |_) | |  __/ |_   ____) |  __/ |   \ V /  __/ |   
+ |_|  |_|\__, |    |_|\__,_||_.__/|_|\___|\__| |_____/ \___|_|    \_/ \___|_|   
+          __/ |                                                                 
+         |___/      📱 HIZLI KONTROL PANELİ & KISAYOL MENÜSÜ                    
+BANNER
+    echo -e "${NC}"
+    echo -e "${YELLOW}Tablet terminaline girmeden tüm işlemleri tek tuşla yönetin:${NC}\n"
+
+    echo -e "  ${BOLD}[ 📊 SİSTEM & DURUM ]${NC}"
+    echo -e "   ${GREEN}1${NC}) Tablet Durum Raporu       ${CYAN}(Sıcaklık, RAM, Pil, IP)${NC}"
+    echo -e "   ${GREEN}2${NC}) Canlı Tablet Terminali   ${CYAN}(SSH ile uğraşmadan direkt bağlan)${NC}"
+    echo -e ""
+    echo -e "  ${BOLD}[ 🖥️ İKİNCİ EKRAN (SECOND SCREEN) ]${NC}"
+    echo -e "   ${GREEN}3${NC}) İkinci Ekranı Başlat - USB   ${CYAN}(Sıfır gecikme kablolu)${NC}"
+    echo -e "   ${GREEN}4${NC}) İkinci Ekranı Başlat - Wi-Fi ${CYAN}(Kablosuz bağlantı)${NC}"
+    echo -e "   ${GREEN}5${NC}) İkinci Ekranı Kapat          ${CYAN}(Normal tablete dön)${NC}"
+    echo -e ""
+    echo -e "  ${BOLD}[ 📻 STEREO HOPARLÖR & CAVA ]${NC}"
+    echo -e "   ${GREEN}6${NC}) Stereo Hoparlörleri Başlat   ${CYAN}(PC Sesini Tablete Aktar)${NC}"
+    echo -e "   ${GREEN}7${NC}) CAVA Ses Spektrumunu Aç      ${CYAN}(Canlı Müzik Görselleştirici)${NC}"
+    echo -e "   ${GREEN}8${NC}) Stereo Hoparlörleri Durdur   ${CYAN}(Ses akışını sonlandır)${NC}"
+    echo -e ""
+    echo -e "  ${BOLD}[ 🌸 EKRAN KORUYUCU & AMBİYANS ]${NC}"
+    echo -e "   ${GREEN}9${NC}) Frutiger Aero Sanat Döngüsü  ${CYAN}(Nostaljik cam & doğa teması)${NC}"
+    echo -e "  ${GREEN}10${NC}) Canlı Akvaryum Döngüsü       ${CYAN}(Tropikal mercan resifi)${NC}"
+    echo -e "  ${GREEN}11${NC}) Canlı Şömine Döngüsü        ${CYAN}(Huzurlu odun ateşi)${NC}"
+    echo -e "  ${GREEN}12${NC}) Cyber Matrix Dijital Yağmur  ${CYAN}(Hacker kod akışı)${NC}"
+    echo -e "  ${GREEN}13${NC}) Ekran Koruyucuyu Durdur      ${CYAN}(Masaüstüne dön)${NC}"
+    echo -e ""
+    echo -e "  ${BOLD}[ 🎌 MEDYA & İNTERNET RADYOSU ]${NC}"
+    echo -e "  ${GREEN}14${NC}) Anime Uygulamasını Aç        ${CYAN}(AnimeDLR Reklamsız)${NC}"
+    echo -e "  ${GREEN}15${NC}) Lofi Radyo Akışı             ${CYAN}(Chill Lofi Beats)${NC}"
+    echo -e "  ${GREEN}16${NC}) Jazz Radyo Akışı             ${CYAN}(Smooth Jazz Cafe)${NC}"
+    echo -e ""
+    echo -e "  ${BOLD}[ ⚡ ÇALIŞMA MODLARI & YÖNETİM ]${NC}"
+    echo -e "  ${GREEN}17${NC}) Saf Linux Sunucu Modu        ${CYAN}(Ekran Kapalı, Maksimum RAM)${NC}"
+    echo -e "  ${GREEN}18${NC}) Saf Android Tablet Modu      ${CYAN}(Normal tablet arayüzü)${NC}"
+    echo -e "  ${GREEN}19${NC}) Hibrit Mod                   ${CYAN}(Android Saat + Linux Servisleri)${NC}"
+    echo -e "  ${GREEN}20${NC}) Güvenli Debloat (RAM Temizle)${CYAN}(60+ gereksiz servisi dondur)${NC}"
+    echo -e "  ${GREEN}21${NC}) Ekran Işığını Aç / Kapat     ${CYAN}(Aç: screen on, Kapat: screen off)${NC}"
+    echo -e "  ${GREEN}22${NC}) Hoparlör Ses Seviyesi Ayarla ${CYAN}(0 - 100 arası)${NC}"
+    echo -e ""
+    echo -e "  ${BOLD}[ ⌨️ ÖZEL KOMUT ÇALIŞTIR ]${NC}"
+    echo -e "  ${GREEN}23${NC}) Serbest README / Linux Komutu Gir ${CYAN}(watch, yt, alarm, play...)${NC}"
+    echo -e ""
+    echo -e "   ${RED}0${NC}) Çıkış"
+    echo -e "${CYAN}----------------------------------------------------------------------${NC}"
+    read -rp "Lütfen bir seçenek girin [0-23]: " CHOICE
+
+    case "$CHOICE" in
+        1)
+            run_cmd "my-tablet-server status"
+            ;;
+        2)
+            clear
+            exec "$DIR/tablet-terminal"
+            ;;
+        3)
+            clear
+            echo -e "${YELLOW}Monitör konumu: [right (varsayılan), left, above, below]${NC}"
+            read -rp "Konum girin (Boş bırakırsanız 'right'): " POS
+            POS="${POS:-right}"
+            "$DIR/second-screen" usb "$POS" || run_cmd "second-screen usb $POS"
+            pause
+            ;;
+        4)
+            clear
+            echo -e "${YELLOW}Monitör konumu: [right (varsayılan), left, above, below]${NC}"
+            read -rp "Konum girin (Boş bırakırsanız 'right'): " POS
+            POS="${POS:-right}"
+            "$DIR/second-screen" wifi "$POS" || run_cmd "second-screen wifi $POS"
+            pause
+            ;;
+        5)
+            "$DIR/second-screen" stop 2>/dev/null || true
+            run_cmd "second-screen stop"
+            ;;
+        6)
+            "$DIR/stereo-speakers" start || run_cmd "stereo-speakers start"
+            pause
+            ;;
+        7)
+            "$DIR/stereo-speakers" cava || run_cmd "stereo-speakers cava"
+            pause
+            ;;
+        8)
+            "$DIR/stereo-speakers" stop 2>/dev/null || true
+            run_cmd "stereo-speakers stop"
+            ;;
+        9)
+            run_cmd "screensaver art"
+            ;;
+        10)
+            run_cmd "screensaver aquarium"
+            ;;
+        11)
+            run_cmd "screensaver fireplace"
+            ;;
+        12)
+            run_cmd "screensaver matrix"
+            ;;
+        13)
+            run_cmd "screensaver stop"
+            ;;
+        14)
+            run_cmd "anime app"
+            ;;
+        15)
+            run_cmd "radio lofi"
+            ;;
+        16)
+            run_cmd "radio jazz"
+            ;;
+        17)
+            run_cmd "my-tablet-server linux"
+            ;;
+        18)
+            run_cmd "my-tablet-server android"
+            ;;
+        19)
+            run_cmd "my-tablet-server hybrid"
+            ;;
+        20)
+            run_cmd "debloat-tablet"
+            ;;
+        21)
+            echo -e "Ekran Durumu Seçin: [1] Aç (screen on), [2] Kapat (screen off)"
+            read -rp "Seçiminiz [1/2]: " SCR_CHOICE
+            if [ "$SCR_CHOICE" = "1" ]; then
+                run_cmd "screen on"
+            else
+                run_cmd "screen off"
+            fi
+            ;;
+        22)
+            read -rp "Ses seviyesi girin (0 - 100): " VOL
+            if [ -n "$VOL" ]; then
+                run_cmd "set-volume $VOL"
+            fi
+            ;;
+        23)
+            echo -e "${YELLOW}Tablette çalıştırmak istediğiniz komutu yazın:${NC}"
+            echo -e "Örnekler: ${CYAN}watch https://stream.mp4${NC}  veya  ${CYAN}yt 'Sarkı Adı'${NC}  veya  ${CYAN}alarm play${NC}"
+            read -rp "Komut: " CUSTOM_CMD
+            if [ -n "$CUSTOM_CMD" ]; then
+                run_cmd "$CUSTOM_CMD"
+            fi
+            ;;
+        0|q|exit)
+            echo -e "\n${GREEN}Görüşmek üzere!${NC}"
+            exit 0
+            ;;
+        *)
+            echo -e "\n${RED}Geçersiz seçenek! Lütfen tekrar deneyin.${NC}"
+            sleep 1
+            ;;
+    esac
+done

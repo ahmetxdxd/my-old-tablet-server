@@ -97,6 +97,68 @@ The installer automatically:
 
 ---
 
+## 🎮 Quick Access & PC Remote Control (No SSH Hassle)
+
+You don't need to struggle with complex SSH commands, IP addresses, ports, or credentials! You can control your tablet directly from your PC terminal without ever entering the tablet:
+
+### ⚡ 1. Fast Tablet Terminal (One-Click / One-Command)
+Instantly jump into the tablet's live Linux console without remembering SSH flags:
+
+```bash
+# On Linux & macOS:
+tablet-terminal
+# (or: tablet terminal)
+```
+
+```cmd
+:: On Windows:
+:: Simply double-click 'tablet-terminal.bat' or run:
+tablet-terminal.bat
+```
+* **Auto-Discovery:** Automatically detects connected USB cable (port forward 2222) or Wi-Fi LAN IP.
+* **Failsafe:** Seamlessly falls back to direct ADB chroot console if SSH server is temporarily offline.
+
+### 🎛️ 2. Interactive Quick Menu (Run README Commands Without Entering Tablet)
+Run any project feature from an interactive, numbered terminal dashboard:
+
+```bash
+# On Linux & macOS:
+tablet-menu
+# (or simply: tablet)
+```
+
+```cmd
+:: On Windows:
+:: Simply double-click 'tablet-menu.bat' or run:
+tablet-menu.bat
+```
+* **One-Click Execution:** Second monitor, stereo speakers, screensavers (Frutiger Aero, Aquarium, Fireplace), debloater, modes, and media tools without touching tablet screen.
+
+### ⌨️ 3. Direct PC Remote Command Runner
+Execute any tablet command directly from your PC terminal in a single line:
+
+```bash
+# Check tablet metrics, temperatures, battery & RAM
+tablet status
+
+# Launch ambient screensavers
+tablet screensaver art
+tablet screensaver aquarium
+
+# Second display & speakers
+tablet second-screen usb
+tablet stereo-speakers start
+
+# Media & maintenance
+tablet anime app
+tablet debloat
+tablet screen off        # Turn off LCD backlight for power saving
+tablet <any-command>     # Executes directly inside tablet Linux
+```
+*(On Windows: use `tablet.bat <command>`, e.g., `tablet.bat status`)*
+
+---
+
 ## ⚙️ Operating Modes
 
 Switch between use cases on the fly without rebooting:
@@ -252,6 +314,9 @@ AI agents can directly:
 
 | Command | Action |
 | :--- | :--- |
+| `tablet-terminal` | Instant live tablet terminal access from PC (No SSH flags needed) |
+| `tablet-menu` | Interactive Quick Control Menu (run commands without entering tablet) |
+| `tablet <command>` | Run any tablet command directly from PC terminal (e.g. `tablet status`) |
 | `my-tablet-server status` | Show CPU temp, frequency, RAM, battery %, and IP |
 | `my-tablet-server linux` | Switch to Pure Linux Server Mode |
 | `my-tablet-server android` | Switch to Pure Android Tablet Mode |

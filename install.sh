@@ -125,10 +125,12 @@ adb push "$EXTRACT_DIR/." /data/local/linux/ >/dev/null
 rm -rf "$EXTRACT_DIR"
 
 # Auto-detect host PC public SSH key and inject into authorized_keys
+TMP_AUTH_KEYS="/tmp/tablet_authorized_keys_temp"
+cp "$DIR/config/authorized_keys" "$TMP_AUTH_KEYS"
 for KEY in "$HOME/.ssh/id_ed25519.pub" "$HOME/.ssh/id_rsa.pub" "$HOME/.ssh/id_ecdsa.pub"; do
     if [ -f "$KEY" ]; then
         echo -e "${BLUE}  Found host SSH public key ($KEY), copying to tablet authorized_keys...${NC}"
-        cat "$KEY" > "$DIR/config/authorized_keys"
+        cat "$KEY" >> "$TMP_AUTH_KEYS"
         break
     fi
 done
@@ -137,6 +139,8 @@ echo -e "${BLUE}  Pushing configurations, audio bridge, precompiled wheels and s
 adb push "$DIR/packages/audio_bridge.jar" /data/local/tmp/packages/ >/dev/null
 [ -d "$DIR/packages/wheels" ] && adb push "$DIR/packages/wheels/." /data/local/tmp/packages/wheels/ >/dev/null 2>&1 || true
 adb push "$DIR/config/." /data/local/tmp/config/ >/dev/null
+adb push "$TMP_AUTH_KEYS" /data/local/tmp/config/authorized_keys >/dev/null
+rm -f "$TMP_AUTH_KEYS"
 adb push "$DIR/core/." /data/local/tmp/core/ >/dev/null
 adb push "$DIR/bin/." /data/local/tmp/bin/ >/dev/null
 
@@ -218,8 +222,18 @@ adb forward tcp:2222 tcp:22 2>/dev/null || true
 adb forward tcp:22 tcp:22 2>/dev/null || true
 
 # Wi-Fi Auto-Sync & PC Host Daemon Configuration
-echo -e "\n${BLUE}--> Setting up Host PC Wi-Fi Auto-Sync & USB daemon...${NC}"
+echo -e "\n${BLUE}--> Setting up Host PC Wi-Fi Auto-Sync, CLI shortcuts & USB daemon...${NC}"
 chmod +x "$DIR/bin/sync-wifi" "$DIR/bin/tablet-daemon" "$DIR/bin/auto-downloader" "$DIR/bin/agy" 2>/dev/null || true
+chmod +x "$DIR/bin/tablet" "$DIR/bin/tablet-terminal" "$DIR/bin/tablet-menu" "$DIR/bin/tablet-term" "$DIR/bin/tablet-ssh" "$DIR/bin/tablet-cmd" 2>/dev/null || true
+
+# Global PC CLI links (~/.local/bin)
+mkdir -p "$HOME/.local/bin"
+ln -sf "$DIR/bin/tablet" "$HOME/.local/bin/tablet" 2>/dev/null || true
+ln -sf "$DIR/bin/tablet-terminal" "$HOME/.local/bin/tablet-terminal" 2>/dev/null || true
+ln -sf "$DIR/bin/tablet-terminal" "$HOME/.local/bin/tablet-term" 2>/dev/null || true
+ln -sf "$DIR/bin/tablet-menu" "$HOME/.local/bin/tablet-menu" 2>/dev/null || true
+echo -e "${GREEN}✓ PC Shortcuts installed to ~/.local/bin (tablet, tablet-terminal, tablet-menu).${NC}"
+
 "$DIR/bin/sync-wifi" || true
 
 # Install and start user systemd service on PC
@@ -276,21 +290,24 @@ esac
 echo -e "\n${GREEN}${BOLD}======================================================================${NC}"
 echo -e "${GREEN}${BOLD}   CONGRATULATIONS! MY TABLET SERVER IS READY!                        ${NC}"
 echo -e "${GREEN}${BOLD}======================================================================${NC}"
-echo -e "${BOLD}How to Connect:${NC}"
-echo -e "1. ${BLUE}Wireless via Wi-Fi (Home LAN):${NC}"
+echo -e "${BOLD}🚀 Fast Access & Remote Control (No SSH confusion):${NC}"
+echo -e "1. ${GREEN}tablet-terminal${NC} (or: ${YELLOW}tablet terminal${NC})"
+echo -e "   Direct one-command access to tablet Linux console (automatic USB/Wi-Fi detection)."
+echo -e "2. ${GREEN}tablet-menu${NC} (or: ${YELLOW}tablet${NC})"
+echo -e "   Interactive control panel: run any README command without entering tablet terminal."
+echo -e "3. ${GREEN}tablet <command>${NC}"
+echo -e "   Execute commands on tablet from PC directly (e.g. ${YELLOW}tablet status${NC}, ${YELLOW}tablet screensaver art${NC})."
+echo -e "\n${BOLD}Traditional SSH Connection (Optional):${NC}"
 if [ -n "$WIFI_IP" ]; then
-    echo -e "   ssh root@${WIFI_IP}  or  ${GREEN}ssh my-tablet-server${NC}"
+    echo -e "   Wi-Fi LAN: ${BLUE}ssh root@${WIFI_IP}${NC}  or  ${GREEN}ssh my-tablet-server${NC}"
 else
-    echo -e "   ${GREEN}ssh my-tablet-server${NC} (after connecting tablet to Wi-Fi)"
+    echo -e "   Wi-Fi LAN: ${GREEN}ssh my-tablet-server${NC} (after connecting tablet to Wi-Fi)"
 fi
-echo -e "2. ${BLUE}Wired via USB Cable (ADB Port Forwarding):${NC}"
-echo -e "   ${GREEN}ssh root@localhost -p 2222${NC}"
-echo -e "   (No password required, your PC SSH key was authorized automatically. Default password: hermes)"
-echo -e "\n${BOLD}Live Synced Terminal Console:${NC}"
-echo -e "   The tablet physical display is running Jackpal Terminal."
-echo -e "   Run ${YELLOW}console${NC} or ${YELLOW}tmux attach -t console${NC} from your PC terminal"
-echo -e "   to view and interact with the exact same live session on the tablet screen."
+echo -e "   Wired USB: ${GREEN}ssh root@localhost -p 2222${NC}"
 echo -e "\n${BOLD}Master CLI & Tools:${NC}"
+echo -e "   Quick Terminal     : ${GREEN}tablet-terminal${NC} (or: tablet terminal)"
+echo -e "   Control Menu       : ${GREEN}tablet-menu${NC} (or: tablet)"
+echo -e "   Direct Run CLI     : ${GREEN}tablet <command>${NC} (or: tablet status)"
 echo -e "   Server CLI helper  : ${YELLOW}my-tablet-server${NC} (or: my-tablet-server status, console, server)"
 echo -e "   Auto-Downloader    : ${GREEN}auto-downloader${NC} (install/upgrade apps anytime)"
 echo -e "   CCTV Security Cam  : ${GREEN}cctv start [max_gb]${NC} (24/7 video surveillance with circular quota)"
@@ -306,7 +323,6 @@ echo -e "   Morning alarm      : ${YELLOW}alarm play${NC}"
 echo -e "   [1] Linux Server   : ${YELLOW}server-mode linux${NC} (headless, screen off, max RAM)"
 echo -e "   [2] Android Tablet : ${YELLOW}server-mode android${NC} (pure tablet, Linux stopped)"
 echo -e "   [3] Hybrid Mode    : ${YELLOW}server-mode hybrid${NC} (Android UI ON + Hermes Timers & Cron)"
-echo -e "   TTY Console Mode   : ${YELLOW}server-mode screen-on${NC} (fullscreen TTY terminal)"
 echo -e "   Screen brightness  : ${YELLOW}screen on${NC} / ${YELLOW}screen off${NC} / ${YELLOW}screen brightness 150${NC}"
 echo -e "   Server dashboard   : ${YELLOW}server-status${NC} (or: ${YELLOW}server-mode status${NC})"
 echo -e "======================================================================\n"

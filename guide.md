@@ -8,15 +8,16 @@ This guide is a complete user and architecture document for turning old Android 
 1. [Project Vision and Architecture](#1-project-vision-and-architecture)
 2. [Supported Hardware and Benchmark Comparison](#2-supported-hardware-and-benchmark-comparison)
 3. [One-Click Installation (Linux & Windows)](#3-one-click-installation-linux--windows)
-4. [Three Core Operating Modes (Linux, Android, Hybrid)](#4-three-core-operating-modes-linux-android-hybrid)
-5. [PC Second Display Mode](#5-pc-second-display-mode)
-6. [Ad-Free Anime & Video Playback System](#6-ad-free-anime--video-playback-system)
-7. [Smart Audio Station & Dalvik AudioBridge](#7-smart-audio-station--dalvik-audiobridge)
-8. [Frutiger Aero Screensavers & Nostalgic Wallpapers](#8-frutiger-aero-screensavers--nostalgic-wallpapers)
-9. [Nostalgic Retro Games & Security Isolation](#9-nostalgic-retro-games--security-isolation)
-10. [Universal Tablet Debloater](#10-universal-tablet-debloater)
-11. [Integration with AI Agents](#11-integration-with-ai-agents)
-12. [Frequently Asked Questions & Troubleshooting](#12-frequently-asked-questions--troubleshooting)
+4. [Quick Terminal Access & Remote Control (No SSH Hassle)](#4-quick-terminal-access--remote-control-no-ssh-hassle)
+5. [Three Core Operating Modes (Linux, Android, Hybrid)](#5-three-core-operating-modes-linux-android-hybrid)
+6. [PC Second Display Mode](#6-pc-second-display-mode)
+7. [Ad-Free Anime & Video Playback System](#7-ad-free-anime--video-playback-system)
+8. [Smart Audio Station & Dalvik AudioBridge](#8-smart-audio-station--dalvik-audiobridge)
+9. [Frutiger Aero Screensavers & Nostalgic Wallpapers](#9-frutiger-aero-screensavers--nostalgic-wallpapers)
+10. [Nostalgic Retro Games & Security Isolation](#10-nostalgic-retro-games--security-isolation)
+11. [Universal Tablet Debloater](#11-universal-tablet-debloater)
+12. [Integration with AI Agents](#12-integration-with-ai-agents)
+13. [Frequently Asked Questions & Troubleshooting](#13-frequently-asked-questions--troubleshooting)
 
 ---
 
@@ -73,10 +74,42 @@ The installation wizard automatically:
 - Installs all required APKs (`animedlr`, `skytube`, `vlc`, `lightning`, `bvnc`, and retro games).
 - Applies thermal runaway patches.
 - Registers an automatic Wi-Fi pairing background service on your PC.
+- Installs global CLI shortcuts (`tablet`, `tablet-terminal`, `tablet-menu`).
 
 ---
 
-## 4. Three Core Operating Modes (Linux, Android, Hybrid)
+## 4. Quick Terminal Access & Remote Control (No SSH Hassle)
+
+You can manage the tablet completely from your PC without entering the tablet terminal:
+
+### ⚡ 1. One-Click Tablet Terminal
+```bash
+tablet-terminal
+# Or on Windows, double-click: tablet-terminal.bat
+```
+- No need to look up IPs, ports, or enter SSH passwords.
+- Auto-detects USB cable or Wi-Fi, and automatically connects to the live synced console.
+
+### 🎛️ 2. Interactive Quick Control Menu
+```bash
+tablet-menu
+# Or on Windows, double-click: tablet-menu.bat
+```
+- Lets you trigger second monitor, stereo speakers, screensavers, debloat, and modes from an interactive numbered menu.
+
+### ⌨️ 3. Direct PC Command Runner
+```bash
+tablet status                  # View CPU temp, battery, RAM
+tablet screensaver art         # Start Frutiger Aero screensaver
+tablet second-screen usb       # Launch USB second monitor
+tablet debloat                 # Clean background bloatware
+tablet <command>               # Run any README command without entering tablet
+```
+*(On Windows: use `tablet.bat <command>`)*
+
+---
+
+## 5. Three Core Operating Modes (Linux, Android, Hybrid)
 
 You can switch the tablet's resource allocation on demand:
 

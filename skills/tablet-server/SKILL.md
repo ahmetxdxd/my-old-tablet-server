@@ -43,7 +43,24 @@ adb devices
 
 ## 2. Core CLI Commands Reference
 
-All project actions are unified under `bin/my-tablet-server` (or standalone binaries in `bin/`):
+All project actions can be invoked directly from the host PC using `tablet` (or via `tablet-terminal` to jump into the tablet's live shell):
+
+### 0. Fast Access & Remote Control from PC
+```bash
+# 1. Connect instantly to tablet's live Linux console (No SSH flags needed):
+tablet-terminal
+
+# 2. Launch interactive quick menu (run any feature without entering tablet):
+tablet-menu
+# (or simply: tablet)
+
+# 3. Run any tablet command remotely from PC:
+tablet status
+tablet screensaver art
+tablet second-screen usb
+tablet debloat
+tablet <any_command>
+```
 
 ### A. Operation Modes
 ```bash

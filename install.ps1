@@ -134,11 +134,13 @@ Remove-Item -Recurse -Force $tempExtract
 
 # Auto-detect host PC public SSH key and inject into authorized_keys
 $userSshDir = Join-Path $env:USERPROFILE ".ssh"
+$tmpAuthKeys = Join-Path $env:TEMP "tablet_authorized_keys_temp"
+Copy-Item (Join-Path $ScriptDir "config\authorized_keys") $tmpAuthKeys -Force
 foreach ($keyName in @("id_ed25519.pub", "id_rsa.pub", "id_ecdsa.pub")) {
     $keyPath = Join-Path $userSshDir $keyName
     if (Test-Path $keyPath) {
         Write-Color "  Found host SSH public key ($keyName), copying to tablet authorized_keys..." Blue
-        Copy-Item $keyPath (Join-Path $ScriptDir "config\authorized_keys") -Force
+        Get-Content $keyPath | Add-Content $tmpAuthKeys
         break
     }
 }
@@ -150,6 +152,8 @@ if (Test-Path $wheelsDir) {
     adb push "$wheelsDir\." /data/local/tmp/packages/wheels/ > $null 2>&1
 }
 adb push "$ScriptDir\config\." /data/local/tmp/config/ > $null
+adb push "$tmpAuthKeys" /data/local/tmp/config/authorized_keys > $null
+Remove-Item -Force $tmpAuthKeys 2>$null
 adb push "$ScriptDir\core\." /data/local/tmp/core/ > $null
 adb push "$ScriptDir\bin\." /data/local/tmp/bin/ > $null
 
@@ -284,27 +288,30 @@ Write-Color @"
 `n======================================================================
    CONGRATULATIONS! MY TABLET SERVER IS READY!                        
 ======================================================================
-How to Connect:
-1. Wireless via Wi-Fi (Home LAN):
+🚀 Fast Access & Remote Control (No SSH confusion):
+1. Quick Terminal (Direct one-click connection to tablet Linux):
+   Double-click 'tablet-terminal.bat' or run: powershell -File bin\tablet-terminal.ps1
+2. Interactive Quick Menu (Run README commands without entering tablet):
+   Double-click 'tablet-menu.bat' or run: powershell -File bin\tablet-menu.ps1
+3. Direct Command Runner:
+   Run: tablet.bat <command>  (e.g.: tablet.bat status, tablet.bat screensaver art)
+
+Traditional SSH Connection (Optional):
 "@ Green
 
 if ($wifiIp) {
-    Write-Color "   ssh root@$wifiIp  or  ssh my-tablet-server" Green
+    Write-Color "   Wi-Fi LAN: ssh root@$wifiIp  or  ssh my-tablet-server" Green
 } else {
-    Write-Color "   ssh my-tablet-server (after connecting tablet to Wi-Fi)" Green
+    Write-Color "   Wi-Fi LAN: ssh my-tablet-server (after connecting tablet to Wi-Fi)" Green
 }
 
 Write-Color @"
-2. Wired via USB Cable (ADB Port Forwarding):
-   ssh root@localhost -p 2222
-   (No password required, your PC SSH key was authorized automatically. Default password: hermes)
-
-Live Synced Terminal Console:
-   The tablet physical display is running Jackpal Terminal.
-   Run console or tmux attach -t console from your PC terminal
-   to view and interact with the exact same live session on the tablet screen.
+   Wired USB: ssh root@localhost -p 2222
 
 Master CLI & Tools:
+   Quick Terminal     : tablet-terminal.bat (or: bin\tablet-terminal.ps1)
+   Control Menu       : tablet-menu.bat (or: bin\tablet-menu.ps1)
+   Direct Run CLI     : tablet.bat <command> (or: tablet.bat status)
    Server CLI helper  : my-tablet-server (or: my-tablet-server status, console, server)
    Auto-Downloader    : auto-downloader (run auto-downloader.bat anytime)
    CCTV Security Cam  : cctv start [max_gb] (24/7 video surveillance with circular quota)
@@ -320,7 +327,6 @@ Master CLI & Tools:
    [1] Linux Server   : server-mode linux (headless, screen off, max RAM)
    [2] Android Tablet : server-mode android (pure tablet, Linux stopped)
    [3] Hybrid Mode    : server-mode hybrid (Android UI ON + Hermes Timers & Cron)
-   TTY Console Mode   : server-mode screen-on (fullscreen TTY terminal)
    Screen brightness  : screen on / screen off / screen brightness 150
    Server dashboard   : server-status (or: server-mode status)
 ======================================================================

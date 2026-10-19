@@ -1,0 +1,127 @@
+#!/bin/bash
+# ==============================================================================
+# My Tablet Server - Host PC Master CLI & Shortcut Runner
+# ==============================================================================
+# Allows running any tablet command from the PC terminal without entering
+# the tablet terminal directly.
+#
+# Examples:
+#   tablet                    -> Opens interactive Quick Menu
+#   tablet terminal           -> Connects instantly to tablet terminal
+#   tablet status             -> Shows tablet metrics, battery, temperature
+#   tablet screensaver art    -> Starts Frutiger Aero screensaver
+#   tablet second-screen usb  -> Starts PC second monitor
+#   tablet debloat            -> Runs safe debloater on tablet
+#   tablet <any_command>      -> Executes command directly inside tablet
+# ==============================================================================
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Colors
+GREEN='\033[01;32m'
+BLUE='\033[01;34m'
+YELLOW='\033[01;33m'
+RED='\033[01;31m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+# Helper: execute command inside tablet chroot
+run_on_tablet() {
+    local CMD="$*"
+
+    # 1. Check USB connection
+    local ADB_DEVICE=$(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1 || true)
+    if [ -n "$ADB_DEVICE" ]; then
+        adb forward tcp:2222 tcp:22 2>/dev/null || true
+
+        # Try SSH first if available
+        if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -p 2222 -q root@127.0.0.1 "exit" 2>/dev/null; then
+            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 -t root@127.0.0.1 "export PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:\$PATH; $CMD"
+            return $?
+        else
+            # Smart ADB chroot execution fallback
+            adb -s "$ADB_DEVICE" shell "su -c '
+                L=/data/local/linux/lib/ld-musl-armhf.so.1
+                B=/data/local/linux/bin/busybox
+                R=/data/local/linux
+                if [ -f \$R/bin/bash ]; then
+                    SH=/bin/bash
+                else
+                    SH=/bin/sh
+                fi
+                \$L \$B chroot \$R \$SH -c \"export PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:\\\$PATH; $CMD\"
+            '"
+            return $?
+        fi
+    fi
+
+    # 2. Check Wi-Fi connection
+    local TARGET_IP=""
+    if [ -f "$HOME/.ssh/config" ]; then
+        TARGET_IP=$(awk '/Host my-tablet-server/{flag=1; next} /Host /{flag=0} flag && /HostName/{print $2; exit}' "$HOME/.ssh/config" 2>/dev/null || true)
+    fi
+
+    if [ -n "$TARGET_IP" ]; then
+        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -t "root@${TARGET_IP}" "export PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:\$PATH; $CMD"
+        return $?
+    fi
+
+    echo -e "${RED}[HATA] Tablete bağlanılamadı! Lütfen USB kablosunu takın veya Wi-Fi ağını kontrol edin.${NC}"
+    return 1
+}
+
+# If no arguments provided, launch the interactive quick menu
+if [ $# -eq 0 ]; then
+    if [ -f "$DIR/tablet-menu" ]; then
+        exec "$DIR/tablet-menu"
+    else
+        echo -e "${RED}[HATA] tablet-menu bulunamadı!${NC}"
+        exit 1
+    fi
+fi
+
+ACTION="$1"
+
+case "$ACTION" in
+    terminal|term|ssh|console|shell|connect)
+        shift
+        exec "$DIR/tablet-terminal" "$@"
+        ;;
+    menu|panel|quick)
+        shift
+        exec "$DIR/tablet-menu" "$@"
+        ;;
+    run|exec)
+        shift
+        run_on_tablet "$@"
+        ;;
+    status)
+        run_on_tablet "server-status 2>/dev/null || my-tablet-server status 2>/dev/null || uname -a"
+        ;;
+    help|--help|-h)
+        echo -e "${BLUE}${BOLD}======================================================${NC}"
+        echo -e "${BLUE}${BOLD}          📱 MY TABLET SERVER - KULLANIM KILAVUZU      ${NC}"
+        echo -e "${BLUE}${BOLD}======================================================${NC}"
+        echo -e "Kullanım:"
+        echo -e "  ${GREEN}tablet${NC}                      : Hızlı Kontrol Menüsünü açar"
+        echo -e "  ${GREEN}tablet terminal${NC}             : Tablet terminaline doğrudan bağlanır"
+        echo -e "  ${GREEN}tablet status${NC}               : Tablet donanım ve batarya durumunu gösterir"
+        echo -e "  ${GREEN}tablet <komut>${NC}              : README komutunu tablet terminaline girmeden çalıştırır"
+        echo -e ""
+        echo -e "Örnek Komutlar (Tablete girmeden çalıştırabilirsiniz):"
+        echo -e "  tablet screensaver art      : Frutiger Aero ekran koruyucuyu açar"
+        echo -e "  tablet screensaver aquarium : Akvaryum modunu açar"
+        echo -e "  tablet second-screen usb    : Tableti USB ikinci monitör yapar"
+        echo -e "  tablet stereo-speakers start: PC stereo hoparlörünü başlatır"
+        echo -e "  tablet anime app            : Anime uygulamasını açar"
+        echo -e "  tablet debloat              : Gereksiz arka plan uygulamalarını temizler"
+        echo -e "  tablet screen off           : Tablet ekran ışığını kapatır (enerji tasarrufu)"
+        echo -e "  tablet screen on            : Tablet ekran ışığını açar"
+        echo -e "  tablet radio lofi           : Lofi radyo akışı başlatır"
+        echo -e "${BLUE}======================================================${NC}"
+        ;;
+    *)
+        # Run command directly on tablet
+        run_on_tablet "$@"
+        ;;
+esac
