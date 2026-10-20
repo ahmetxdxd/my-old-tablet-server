@@ -114,6 +114,13 @@ start_second_screen() {
     # 3. Clean up any previous virtual monitor instance
     stop_second_screen silent
 
+    # Check Firewall (UFW)
+    if which ufw >/dev/null 2>&1 && systemctl is-active ufw 2>/dev/null | grep -q "active"; then
+        log_info "UFW Güvenlik Duvarı tespit edildi."
+        log_warn "Host PC'de UFW aktif. SSH reverse tüneli (5900:127.0.0.1:5900) kullanıldığında güvenlik duvarı engeli tamamen aşılır."
+        log_info "Doğrudan Wi-Fi LAN bağlantısı için gerekirse: sudo ufw allow 5900/tcp"
+    fi
+
     log_info "KWin Wayland Sanal Monitör oluşturuluyor ($RESOLUTION @ 60Hz)..."
     systemd-run --user --unit=tablet-screen \
         /usr/bin/krfb-virtualmonitor \
@@ -168,15 +175,44 @@ start_second_screen() {
 
     # 5. Launch bVNC on tablet
     local PC_IP=$(get_pc_ip)
+    local CONNECT_URL=""
+    local USE_SSH_TUNNEL=0
+
+    pkill -f "ssh.*-R $PORT:127.0.0.1:$PORT" 2>/dev/null || true
 
     if [ "$CONN_MODE" = "usb" ]; then
-        log_info "USB Kablo Modu: Port yönlendirme kuruluyor ve bVNC başlatılıyor..."
-        adb -s "$TARGET_ID" forward tcp:$PORT tcp:$PORT 2>/dev/null || adb forward tcp:$PORT tcp:$PORT 2>/dev/null || true
-        adb -s "$TARGET_ID" shell "am start -a android.intent.action.VIEW -d 'vnc://$PASSWORD@$PC_IP:$PORT'" >/dev/null 2>&1 || \
-        adb shell "am start -a android.intent.action.VIEW -d 'vnc://$PASSWORD@$PC_IP:$PORT'" >/dev/null 2>&1 || true
-        log_ok "USB bağlantısı tamamlandı (Sıfır Gecikme Modu)."
+        log_info "USB Kablo Modu: Bağlantı kuruluyor..."
+        # Android 4.4 'adb reverse' desteklemez; adb forward ise hosttan tablete yönlendirir.
+        # Bu yüzden bağlantı USB üzerinden yönlendirilen SSH reverse tüneli (-R 5900:127.0.0.1:5900)
+        # veya yerel Wi-Fi IP üzerinden kurulmalıdır.
+        adb -s "$TARGET_ID" forward tcp:2222 tcp:22 2>/dev/null || adb forward tcp:2222 tcp:22 2>/dev/null || true
+        if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -p 2222 -q root@127.0.0.1 "exit" 2>/dev/null; then
+            log_info "USB üzerinden SSH reverse tüneli oluşturuluyor ($PORT:127.0.0.1:$PORT)..."
+            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ExitOnForwardFailure=no -o ConnectTimeout=3 -f -N -p 2222 -R $PORT:127.0.0.1:$PORT root@127.0.0.1 2>/dev/null || true
+            CONNECT_URL="vnc://$PASSWORD@127.0.0.1:$PORT"
+            USE_SSH_TUNNEL=1
+            log_ok "SSH Reverse Tüneli aktif (Host UFW engeli aşıldı, 127.0.0.1:$PORT)."
+        else
+            log_warn "Tablette SSH servisi bulunamadı, doğrudan LAN IP ($PC_IP:$PORT) deneniyor..."
+            CONNECT_URL="vnc://$PASSWORD@$PC_IP:$PORT"
+        fi
+
+        adb -s "$TARGET_ID" shell "am start -a android.intent.action.VIEW -d '$CONNECT_URL'" >/dev/null 2>&1 || \
+        adb shell "am start -a android.intent.action.VIEW -d '$CONNECT_URL'" >/dev/null 2>&1 || true
+        log_ok "USB bağlantı isteği gönderildi."
     else
-        log_info "Kablosuz Wi-Fi Modu: PC IP: $PC_IP:$PORT üzerinden bağlanılıyor..."
+        log_info "Kablosuz Wi-Fi Modu hazırlanıyor..."
+        if [ "$TARGET_TYPE" = "wifi" ] && ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -q root@$TARGET_ID "exit" 2>/dev/null; then
+            log_info "Wi-Fi üzerinden SSH reverse tüneli kuruluyor ($PORT:127.0.0.1:$PORT)..."
+            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ExitOnForwardFailure=no -o ConnectTimeout=3 -f -N -R $PORT:127.0.0.1:$PORT root@$TARGET_ID 2>/dev/null || true
+            CONNECT_URL="vnc://$PASSWORD@127.0.0.1:$PORT"
+            USE_SSH_TUNNEL=1
+            log_ok "SSH Reverse Tüneli aktif (Host UFW engeli aşıldı, 127.0.0.1:$PORT)."
+        else
+            CONNECT_URL="vnc://$PASSWORD@$PC_IP:$PORT"
+            log_info "PC IP: $PC_IP:$PORT üzerinden bağlanılıyor..."
+        fi
+
         if [ "$TARGET_TYPE" = "wifi" ]; then
             ssh -o StrictHostKeyChecking=no root@$TARGET_ID '
                 export ANDROID_ROOT=/system
@@ -184,12 +220,12 @@ start_second_screen() {
                 export BOOTCLASSPATH=/system/framework/core.jar:/system/framework/conscrypt.jar:/system/framework/core-junit.jar:/system/framework/bouncycastle.jar:/system/framework/ext.jar:/system/framework/framework.jar:/system/framework/framework2.jar:/system/framework/twframework.jar:/system/framework/android.policy.jar:/system/framework/services.jar:/system/framework/apache-xml.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/mms-common.jar:/system/framework/webviewchromium.jar:/system/framework/sec_edm.jar:/system/framework/com.android.location.provider.jar:/system/framework/input.jar:/system/framework/okhttp.jar
                 export LD_LIBRARY_PATH=/vendor/lib:/system/lib:/lib
                 export PATH=/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin:$PATH
-                /system/bin/am start -a android.intent.action.VIEW -d "vnc://'$PASSWORD'@'$PC_IP':'$PORT'" >/dev/null 2>&1
+                /system/bin/am start -a android.intent.action.VIEW -d "'"$CONNECT_URL"'" >/dev/null 2>&1
             ' >/dev/null 2>&1 || true
         else
-            adb shell "am start -a android.intent.action.VIEW -d 'vnc://$PASSWORD@$PC_IP:$PORT'" >/dev/null 2>&1 || true
+            adb shell "am start -a android.intent.action.VIEW -d '$CONNECT_URL'" >/dev/null 2>&1 || true
         fi
-        log_ok "Wi-Fi bağlantısı tamamlandı (Kablosuz İkinci Ekran)."
+        log_ok "Wi-Fi bağlantısı tamamlandı."
     fi
 
     echo -e "\n${GREEN}${BOLD}======================================================================${NC}"
@@ -213,6 +249,8 @@ stop_second_screen() {
 
     systemctl --user stop tablet-screen 2>/dev/null || true
     pkill -9 -f krfb-virtualmonitor 2>/dev/null || true
+    pkill -f "ssh.*-R $PORT:127.0.0.1:$PORT" 2>/dev/null || true
+    pkill -f "ssh.*-R 5900:127.0.0.1:5900" 2>/dev/null || true
 
     # Close bVNC on connected ADB tablets
     for DEV in $(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}'); do

@@ -112,8 +112,8 @@ tablet-terminal
 
 ```cmd
 :: On Windows:
-:: Simply double-click 'tablet-terminal.bat' or run:
-tablet-terminal.bat
+:: Simply double-click 'shortcuts\21-tablet-terminal.bat' or run:
+.\shortcuts\21-tablet-terminal.bat
 ```
 * **Auto-Discovery:** Automatically detects connected USB cable (port forward 2222) or Wi-Fi LAN IP.
 * **Failsafe:** Seamlessly falls back to direct ADB chroot console if SSH server is temporarily offline.
@@ -129,8 +129,8 @@ tablet-menu
 
 ```cmd
 :: On Windows:
-:: Simply double-click 'tablet-menu.bat' or run:
-tablet-menu.bat
+:: Simply double-click 'shortcuts\20-tablet-menu.bat' or run:
+.\shortcuts\20-tablet-menu.bat
 ```
 * **One-Click Execution:** Second monitor, stereo speakers, screensavers (Frutiger Aero, Aquarium, Fireplace), debloater, modes, and media tools without touching tablet screen.
 

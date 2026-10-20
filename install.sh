@@ -62,6 +62,13 @@ if [[ "$ROOT_CHECK" != *"uid=0"* ]]; then
 fi
 echo -e "${GREEN}✓ Root Access Verified (uid=0).${NC}"
 
+# Check for existing /data/local/linux installation
+EXISTING_INSTALL=$(adb shell "su -c '[ -d /data/local/linux ] && echo exists || echo none'" 2>/dev/null | tr -d '\r\n')
+if [ "$EXISTING_INSTALL" = "exists" ]; then
+    echo -e "\n${YELLOW}${BOLD}[BİLGİ / TESPİT] Tablet üzerinde mevcut Linux kurulumu (/data/local/linux) tespit edildi!${NC}"
+    echo -e "${BLUE}  İkinci veya çakışan bir chroot/dizin oluşturulmayacak; mevcut kurulum algılanarak temiz şekilde sıfırlanıp (reset & re-init) başlatılacaktır.${NC}"
+fi
+
 # Confirmation & Clean Slate Prompt
 echo -e "\n${RED}${BOLD}======================================================================${NC}"
 echo -e "${RED}${BOLD}   WARNING: CLEAN SLATE & FRESH INSTALLATION CONFIRMATION             ${NC}"
@@ -102,15 +109,31 @@ if [ ! -f "$DIR/packages/audio_bridge.jar" ]; then
     exit 1
 fi
 
-echo -e "${YELLOW}[3/8] Performing Clean Slate Wipe on Tablet...${NC}"
+echo -e "${YELLOW}[3/8] Performing Clean Slate Reset & Wipe on Tablet...${NC}"
 adb shell "su -c '
-    umount -l /data/local/linux/* /data/local/alpine/* 2>/dev/null || true
+    # 1. Kill any active chroot or daemon processes
+    pkill -9 sshd 2>/dev/null || true
+    pkill -9 crond 2>/dev/null || true
+    pkill -9 tmux 2>/dev/null || true
+    pkill -9 snapclient 2>/dev/null || true
+    pkill -9 -f AudioBridgeServer 2>/dev/null || true
+
+    # 2. Unmount all virtual filesystems under /data/local/linux in proper order
+    for mp in /data/local/linux/dev/pts /data/local/linux/dev /data/local/linux/proc /data/local/linux/sys /data/local/linux/system /data/local/linux/android_data /data/local/linux/sdcard /data/local/linux/data; do
+        umount -l \"\$mp\" 2>/dev/null || true
+    done
+    for m in \$(cat /proc/mounts 2>/dev/null | grep \"/data/local/linux\" | awk \"{print \\\$2}\" | sort -r); do
+        umount -l \"\$m\" 2>/dev/null || true
+    done
+    umount -l /data/local/alpine/* 2>/dev/null || true
+
+    # 3. Clean up directory structures
     rm -rf /data/local/linux /data/local/alpine /data/local/tmp/* 2>/dev/null || true
     mkdir -p /data/local/linux /data/local/tmp/config /data/local/tmp/core /data/local/tmp/bin /data/local/tmp/packages
     chmod 777 /data/local/linux /data/local/tmp
     chmod 777 /data/local/tmp/config /data/local/tmp/core /data/local/tmp/bin /data/local/tmp/packages
 '"
-echo -e "${GREEN}✓ Old chroot environments, caches and temporary files wiped clean.${NC}"
+echo -e "${GREEN}✓ Existing environment safely stopped, unmounted and wiped clean.${NC}"
 
 echo -e "${YELLOW}[4/8] Extracting & Deploying Alpine Linux ARMv7 RootFS...${NC}"
 
@@ -204,6 +227,7 @@ echo -e "${GREEN}✓ Minimal Alpine Linux environment and base server packages i
 echo -e "${YELLOW}[7/8] Step 3: Configuring Fullscreen Console & Hardware Terminal...${NC}"
 adb shell "su -c 'sh /data/local/tmp/core/04_setup_terminal.sh'"
 adb shell "su -c 'sh /data/local/tmp/core/05_audio_bridge.sh'"
+adb shell "sh /data/local/start_audio_bridge.sh >/dev/null 2>&1 &"
 echo -e "${GREEN}✓ Live terminal console and hardware audio bridge ready.${NC}"
 
 echo -e "${YELLOW}[8/8] Step 4: Installing Persistent Auto-Boot Hook & Launching Daemons...${NC}"

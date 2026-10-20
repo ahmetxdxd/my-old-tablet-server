@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Auto Downloader
+Comment=Download and update all media packages & wheels
+Exec=bash -c "cd $(dirname %k) && ./22-auto-downloader.sh"
+Icon=download
+Terminal=false
+Categories=Utility;
+StartupNotify=true

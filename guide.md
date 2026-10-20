@@ -85,7 +85,7 @@ You can manage the tablet completely from your PC without entering the tablet te
 ### ⚡ 1. One-Click Tablet Terminal
 ```bash
 tablet-terminal
-# Or on Windows, double-click: tablet-terminal.bat
+# Or on Windows, double-click: shortcuts\21-tablet-terminal.bat
 ```
 - No need to look up IPs, ports, or enter SSH passwords.
 - Auto-detects USB cable or Wi-Fi, and automatically connects to the live synced console.
@@ -93,7 +93,7 @@ tablet-terminal
 ### 🎛️ 2. Interactive Quick Control Menu
 ```bash
 tablet-menu
-# Or on Windows, double-click: tablet-menu.bat
+# Or on Windows, double-click: shortcuts\20-tablet-menu.bat
 ```
 - Lets you trigger second monitor, stereo speakers, screensavers, debloat, and modes from an interactive numbered menu.
 
@@ -105,7 +105,7 @@ tablet second-screen usb       # Launch USB second monitor
 tablet debloat                 # Clean background bloatware
 tablet <command>               # Run any README command without entering tablet
 ```
-*(On Windows: use `tablet.bat <command>`)*
+*(On Windows: use `powershell -File bin\tablet.ps1 <command>` or shortcuts)*
 
 ### 🖱️ 4. One-Click Desktop Shortcuts (Zero Terminal Window)
 Use the **`shortcuts/`** folder to trigger any feature without seeing a terminal window:

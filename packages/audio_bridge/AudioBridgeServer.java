@@ -28,6 +28,11 @@ public class AudioBridgeServer {
     public static void main(String[] args) {
         System.out.println("[AudioBridge] Hermes Android Ses Köprüsü Başlatılıyor...");
 
+        // Android Paranoid Network (EACCES fix):
+        // su/root ve bağımsız süreçlerde AID_INET (GID 3003) bulunmadığında çekirdek soket açılmasına izin vermez.
+        // GID'yi 3003 (AID_INET) yaparak 4711 ve 4712 portlarının sorunsuz açılmasını sağla.
+        applyNetworkGroup();
+
         // Samsung Android 4.4: AudioTrack kurucusu ActivityThread.currentPackageName()
         // sonucunu .equals() ile karşılaştırır; app_process'te bu null olduğundan NPE oluşur.
         initFakeActivityThread();
@@ -39,6 +44,28 @@ public class AudioBridgeServer {
 
         // Ana thread'de Canlı PCM akışını dinle
         runPcmServer();
+    }
+
+    private static void applyNetworkGroup() {
+        try {
+            Class<?> libcoreClass = Class.forName("libcore.io.Libcore");
+            java.lang.reflect.Field osField = libcoreClass.getField("os");
+            Object os = osField.get(null);
+
+            try {
+                java.lang.reflect.Method setgidMethod = os.getClass().getMethod("setgid", int.class);
+                setgidMethod.invoke(os, 3003); // AID_INET
+            } catch (Throwable t) {}
+
+            try {
+                java.lang.reflect.Method setegidMethod = os.getClass().getMethod("setegid", int.class);
+                setegidMethod.invoke(os, 3003); // AID_INET
+            } catch (Throwable t) {}
+
+            System.out.println("[AudioBridge] AID_INET (GID 3003) başarıyla uygulandı.");
+        } catch (Throwable t) {
+            System.err.println("[AudioBridge] AID_INET (GID 3003) ayarlanamadı: " + t.getMessage());
+        }
     }
 
     private static void initFakeActivityThread() {

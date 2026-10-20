@@ -24,7 +24,9 @@ if pgrep -f "AudioBridgeServer" >/dev/null 2>&1; then
 fi
 
 export CLASSPATH=/data/local/audio_bridge.jar
-(trap "" 1; /system/bin/app_process / AudioBridgeServer >/dev/null 2>&1 </dev/null &)
+mkdir -p /data/local/tmp 2>/dev/null || true
+chmod 777 /data/local/tmp 2>/dev/null || true
+(trap "" 1; /system/bin/app_process / AudioBridgeServer >/data/local/tmp/audio_bridge.log 2>&1 </dev/null &)
 EOF
 chmod 755 "/data/local/start_audio_bridge.sh"
 cp "/data/local/start_audio_bridge.sh" "$TARGET/start_audio_bridge.sh" 2>/dev/null

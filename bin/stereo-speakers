@@ -197,13 +197,38 @@ start_speakers() {
 
     # 4. Connect Samsung Galaxy Tab 3 (Sol Kanal / Left Channel)
     log_info "Samsung Galaxy Tab 3 (Sol Kanal) hazırlanıyor..."
-    # Reverse SSH tunnel ensures 100% connectivity bypassing firewalls
-    ssh -o ExitOnForwardFailure=no -o ConnectTimeout=2 -f -N -R 1704:127.0.0.1:1704 my-tablet-server 2>/dev/null || true
+    pkill -f "ssh.*-R 1704:127.0.0.1:1704" 2>/dev/null || true
 
-    # Start snapclient on Samsung in chroot piping directly to Dalvik AudioBridge (4711)
-    ssh my-tablet-server "pkill -f snapclient 2>/dev/null || true"
-    ssh my-tablet-server "nohup sh -c 'snapclient --player file:filename=stdout tcp://127.0.0.1:1704 2>/dev/null | nc 127.0.0.1 4711 >/dev/null 2>&1' >/dev/null 2>&1 &" 2>/dev/null || true
-    log_ok "Samsung Tab 3 (Sol Hoparlör) ses köprüsüne bağlandı."
+    local USB_DEV=$(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1)
+    local SSH_CMD="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3"
+    local CONNECTED_SSH=0
+
+    # Ensure AudioBridge is running on tablet
+    if [ -n "$USB_DEV" ]; then
+        adb -s "$USB_DEV" shell "sh /data/local/start_audio_bridge.sh" >/dev/null 2>&1 || true
+    fi
+
+    # Try USB forwarded SSH first
+    if [ -n "$USB_DEV" ]; then
+        adb -s "$USB_DEV" forward tcp:2222 tcp:22 2>/dev/null || true
+        if $SSH_CMD -p 2222 -q root@127.0.0.1 "exit" 2>/dev/null; then
+            log_info "USB üzerinden SSH reverse tüneli kuruluyor (-R 1704:127.0.0.1:1704)..."
+            $SSH_CMD -o ExitOnForwardFailure=no -f -N -p 2222 -R 1704:127.0.0.1:1704 root@127.0.0.1 2>/dev/null || true
+            $SSH_CMD -p 2222 root@127.0.0.1 "pkill -f snapclient 2>/dev/null || true" 2>/dev/null || true
+            $SSH_CMD -p 2222 root@127.0.0.1 "nohup sh -c 'snapclient --player file:filename=stdout tcp://127.0.0.1:1704 2>/dev/null | nc 127.0.0.1 4711 >/dev/null 2>&1' >/dev/null 2>&1 &" 2>/dev/null || true
+            CONNECTED_SSH=1
+            log_ok "Samsung Tab 3 USB üzerinden ses köprüsüne bağlandı (UFW engeli aşıldı)."
+        fi
+    fi
+
+    # If USB SSH not established, try Wi-Fi SSH (my-tablet-server)
+    if [ "$CONNECTED_SSH" -eq 0 ]; then
+        log_info "Wi-Fi üzerinden SSH reverse tüneli kuruluyor (-R 1704:127.0.0.1:1704)..."
+        ssh -o StrictHostKeyChecking=no -o ExitOnForwardFailure=no -o ConnectTimeout=3 -f -N -R 1704:127.0.0.1:1704 my-tablet-server 2>/dev/null || true
+        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 my-tablet-server "pkill -f snapclient 2>/dev/null || true" 2>/dev/null || true
+        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 my-tablet-server "nohup sh -c 'snapclient --player file:filename=stdout tcp://127.0.0.1:1704 2>/dev/null | nc 127.0.0.1 4711 >/dev/null 2>&1' >/dev/null 2>&1 &" 2>/dev/null || true
+        log_ok "Samsung Tab 3 (Sol Hoparlör) ses köprüsüne bağlandı."
+    fi
 
     # 5. Connect Vestel Tablet (Sağ Kanal / Right Channel)
     log_info "Vestel V Tab 7 Lite II (Sağ Kanal) kontrol ediliyor..."
@@ -243,8 +268,10 @@ stop_speakers() {
     pkill -f "snapserver.*snapserver.conf" 2>/dev/null || true
     pkill -f "pw-record.*snapfifo" 2>/dev/null || true
 
-    # 2. Stop Samsung Snapclient
-    ssh -o ConnectTimeout=2 my-tablet-server "pkill -f snapclient 2>/dev/null || true" 2>/dev/null || true
+    # 2. Stop Samsung Snapclient & SSH reverse tunnel
+    pkill -f "ssh.*-R 1704:127.0.0.1:1704" 2>/dev/null || true
+    ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 -p 2222 root@127.0.0.1 "pkill -f snapclient 2>/dev/null || true" 2>/dev/null || true
+    ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 my-tablet-server "pkill -f snapclient 2>/dev/null || true" 2>/dev/null || true
 
     # 3. Stop Vestel Snapcast app
     local VESTEL_DEV=$(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1)
