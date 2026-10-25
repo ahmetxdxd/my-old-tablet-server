@@ -31,11 +31,11 @@ adb devices
 
 ### B. Device Profiles in this Setup
 1. **Samsung Galaxy Tab 3 7.0 (SM-T210)** - Primary 24/7 Linux Server
-   - **Access:** `ssh my-tablet-server` (or `ssh -p 22 root@192.168.1.109`)
+   - **Access:** `ssh my-tablet-server` (or `ssh -p 22 root@<tablet-ip>`)
    - **OS:** Alpine Linux ARMv7 in chroot on Android 4.4.2 KitKat (Rooted).
    - **Features:** Headless Linux daemon, OpenSSH, Tmux console, Nous Hermes AI, Crond, Dalvik AudioBridge (`127.0.0.1:4711`).
 2. **Vestel V Tab 7 Lite II (`V_TAB_7_LITE_II`)** - Dedicated Second Screen & Media Tablet
-   - **Access:** ADB via USB (`0582436374445700707`) or Wi-Fi (`192.168.1.111`).
+   - **Access:** ADB via USB or Wi-Fi (`<tablet-ip>`).
    - **OS:** Stock Android 4.4.2 KitKat (63 bloatware packages safely frozen via `pm block`).
    - **Features:** 1024x600 @ 60 FPS Wayland virtual monitor client (`bVNC`), AnimeDLR, SkyTube Extra, VLC.
 

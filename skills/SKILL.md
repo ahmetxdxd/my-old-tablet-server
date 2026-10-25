@@ -1,1 +1,0 @@
-tablet-server/SKILL.md

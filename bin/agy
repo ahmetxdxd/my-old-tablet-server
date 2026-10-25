@@ -8,11 +8,12 @@
 #   2. Falls back to standalone local Antigravity AI terminal agent if offline.
 # ==============================================================================
 
-PC_USER="${PC_USER:-neo}"
-PC_IP="${PC_IP:-192.168.1.110}"
+DEFAULT_GW=$(ip -4 route show default 2>/dev/null | awk '{print $3}' | head -n1)
+PC_USER="${PC_USER:-${USER:-user}}"
+PC_IP="${PC_IP:-$DEFAULT_GW}"
 
 # Check if Host PC SSH is reachable
-if nc -z -w 2 "$PC_IP" 22 >/dev/null 2>&1; then
+if [ -n "$PC_IP" ] && nc -z -w 2 "$PC_IP" 22 >/dev/null 2>&1; then
     echo "[Antigravity] Connecting to Host PC ($PC_IP) Antigravity CLI session..."
     exec ssh -t -o ConnectTimeout=2 "${PC_USER}@${PC_IP}" "export PATH=\$HOME/.local/bin:\$PATH; agy $*"
 fi
@@ -29,7 +30,7 @@ else
     echo "======================================================"
     echo "To connect to Host PC Antigravity CLI session:"
     echo "  1. Start SSH on your PC: sudo systemctl start ssh"
-    echo "  2. Ensure PC is connected to the same Wi-Fi ($PC_IP)"
+    echo "  2. Ensure PC is connected to the same Wi-Fi network"
     echo "Or install local AI agent with: auto-downloader"
     echo "======================================================"
     exit 0

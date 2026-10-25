@@ -143,21 +143,24 @@ powershell -ExecutionPolicy Bypass -File .\uninstall.ps1
 
 ---
 
----
-
 ## 🌟 Graphical Multi-Tablet Desktop Dashboard (Zero Terminal Required)
 
 Manage all connected tablets, switch between devices, launch second screens, stream audio, and diagnose issues with a modern, glassmorphic graphical desktop dashboard:
 
+#### 🖱️ One-Click / Double-Click Launch:
+* **🐧 On Linux & macOS:** Simply double-click **`My-Tablet-Server.desktop`** (or **`dashboard.sh`**) right inside the repository folder, or launch it from your Desktop / App Menu.
+* **🪟 On Windows:** Simply double-click **`dashboard.bat`** in the repository folder.
+
+#### ⌨️ Command Line Launch:
 ```bash
 # On Linux & macOS:
 tablet ui
-# (or: tablet dashboard)
+# (or: ./dashboard.sh)
 ```
 
 ```cmd
 :: On Windows:
-:: Double-click 'shortcuts\windows\00-tablet-dashboard.bat' or run:
+:: Double-click 'dashboard.bat' or run:
 tablet ui
 ```
 

@@ -75,24 +75,16 @@ detect_tablet() {
         fi
     done
 
-    # Check Wi-Fi tablet from ~/.ssh/config or default
+    # Check Wi-Fi tablet from ~/.ssh/config or active device
     local TARGET_IP=""
     if [ -f "$HOME/.ssh/config" ]; then
         TARGET_IP=$(awk '/Host my-tablet-server/{flag=1; next} /Host /{flag=0} flag && /HostName/{print $2; exit}' "$HOME/.ssh/config" 2>/dev/null || true)
     fi
-    [ -z "$TARGET_IP" ] && TARGET_IP="192.168.1.105"
 
-    if ping -c 1 -W 1 "$TARGET_IP" >/dev/null 2>&1; then
+    if [ -n "$TARGET_IP" ] && ping -c 1 -W 1 "$TARGET_IP" >/dev/null 2>&1; then
         echo "wifi:$TARGET_IP"
         return
     fi
-
-    for IP in 192.168.1.105 192.168.1.109 192.168.1.111; do
-        if ping -c 1 -W 1 "$IP" >/dev/null 2>&1; then
-            echo "wifi:$IP"
-            return
-        fi
-    done
 
     echo "none"
 }
@@ -299,9 +291,8 @@ stop_second_screen() {
     if [ -f "$HOME/.ssh/config" ]; then
         TARGET_IP=$(awk '/Host my-tablet-server/{flag=1; next} /Host /{flag=0} flag && /HostName/{print $2; exit}' "$HOME/.ssh/config" 2>/dev/null || true)
     fi
-    [ -z "$TARGET_IP" ] && TARGET_IP="192.168.1.105"
 
-    if ping -c 1 -W 1 "$TARGET_IP" >/dev/null 2>&1; then
+    if [ -n "$TARGET_IP" ] && ping -c 1 -W 1 "$TARGET_IP" >/dev/null 2>&1; then
         ssh -o StrictHostKeyChecking=no root@$TARGET_IP '
             export ANDROID_ROOT=/system
             export ANDROID_DATA=/data

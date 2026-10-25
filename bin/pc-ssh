@@ -3,8 +3,14 @@
 # My Tablet Server - SSH to Host PC Shortcut
 # ==============================================================================
 
-PC_USER="${PC_USER:-neo}"
-PC_IP="${PC_IP:-192.168.1.110}"
+DEFAULT_GW=$(ip -4 route show default 2>/dev/null | awk '{print $3}' | head -n1)
+PC_IP="${PC_IP:-${1:-$DEFAULT_GW}}"
+PC_USER="${PC_USER:-${USER:-user}}"
+
+if [ -z "$PC_IP" ]; then
+    echo "Usage: pc-ssh [HOST_IP] [USER]"
+    exit 1
+fi
 
 echo "[PC-SSH] Connecting to $PC_USER@$PC_IP..."
 exec ssh "${PC_USER}@${PC_IP}" "$@"

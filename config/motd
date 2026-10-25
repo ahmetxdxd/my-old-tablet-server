@@ -20,5 +20,5 @@
    * radio <lofi|jazz|rock|url> : Live internet radio streaming
    * yt "<search|url>"      : YouTube audio player (Kernel 3.4.5 IPv4 forced)
    * console                : Attach to live tmux session mirroring tablet screen
-   * wake-pc / pc-status    : Wake up host PC (192.168.1.110) via Wake-on-LAN
+   * wake-pc / pc-status    : Wake up host PC via Wake-on-LAN
 ======================================================================

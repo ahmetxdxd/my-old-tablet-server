@@ -3,13 +3,19 @@
 # My Tablet Server - Ping Host PC Status
 # ==============================================================================
 
-PC_IP="${1:-192.168.1.110}"
+DEFAULT_GW=$(ip -4 route show default 2>/dev/null | awk '{print $3}' | head -n1)
+PC_IP="${1:-${PC_IP:-$DEFAULT_GW}}"
+
+if [ -z "$PC_IP" ]; then
+    echo "Usage: pc-status [HOST_PC_IP]"
+    exit 1
+fi
 
 if ping -c 1 -W 1 "$PC_IP" >/dev/null 2>&1; then
     echo "[ONLINE] Host PC ($PC_IP) is active and reachable."
     exit 0
 else
     echo "[OFFLINE / SLEEP] Host PC ($PC_IP) is not responding."
-    echo "To wake up: wake-pc"
+    echo "To wake up: wake-pc <MAC_ADDRESS>"
     exit 1
 fi

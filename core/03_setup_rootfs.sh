@@ -34,7 +34,6 @@ EOF
 cat > "$TARGET/etc/hosts" << 'EOF'
 127.0.0.1       localhost my-tablet-server
 ::1             localhost my-tablet-server
-192.168.1.110   host-pc pc
 EOF
 
 echo "my-tablet-server" > "$TARGET/etc/hostname"

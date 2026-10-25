@@ -36,15 +36,13 @@ detect_target() {
         fi
     done
 
-    # 2. Check Wi-Fi Samsung Tablet (SM-T210)
-    if ping -c 1 -W 1 192.168.1.109 >/dev/null 2>&1; then
-        echo "ssh:192.168.1.109"
-        return
+    # 2. Check Wi-Fi Tablet from SSH config or active device
+    local TARGET_IP=""
+    if [ -f "$HOME/.ssh/config" ]; then
+        TARGET_IP=$(awk '/Host my-tablet-server/{flag=1; next} /Host /{flag=0} flag && /HostName/{print $2; exit}' "$HOME/.ssh/config" 2>/dev/null || true)
     fi
-
-    # 3. Check Wi-Fi Vestel Tablet (192.168.1.111)
-    if ping -c 1 -W 1 192.168.1.111 >/dev/null 2>&1; then
-        echo "wifi:192.168.1.111"
+    if [ -n "$TARGET_IP" ] && ping -c 1 -W 1 "$TARGET_IP" >/dev/null 2>&1; then
+        echo "ssh:$TARGET_IP"
         return
     fi
 
