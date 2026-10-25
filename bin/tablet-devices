@@ -1,15 +1,18 @@
 #!/bin/bash
 # ==============================================================================
-# MY TABLET SERVER - Multi-Device Manager & Scanner
+# MY TABLET SERVER - Multi-Device Manager & Network Discovery
 # ==============================================================================
 # Discovers, inspects, and manages multiple connected tablets (USB & Wi-Fi).
-# Eliminates confusion when multiple tablets are connected simultaneously.
+# Automatically scans ARP neighbors for ADB (port 5555) and SSH (port 22).
+# Supports connecting to Wi-Fi tablets by IP with live metrics.
 # ==============================================================================
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd || echo "")"
 CONFIG_DIR="$HOME/.config/my-tablet-server"
 ACTIVE_FILE="$CONFIG_DIR/active_device"
+KNOWN_FILE="$CONFIG_DIR/known_tablets.txt"
 mkdir -p "$CONFIG_DIR"
+touch "$KNOWN_FILE"
 
 GREEN='\033[01;32m'
 BLUE='\033[01;34m'
@@ -36,12 +39,93 @@ set_active_device() {
     echo "$DEV_ID" > "$ACTIVE_FILE"
 }
 
+# Connect to a Wi-Fi tablet by IP
+connect_wifi_ip() {
+    local TARGET_IP="$1"
+    local PORT="${2:-5555}"
+    [ -z "$TARGET_IP" ] && return 1
+
+    # Strip port if passed in IP
+    if [[ "$TARGET_IP" == *":"* ]]; then
+        PORT=$(echo "$TARGET_IP" | cut -d':' -f2)
+        TARGET_IP=$(echo "$TARGET_IP" | cut -d':' -f1)
+    fi
+
+    # Save to known tablets
+    if ! grep -q "^${TARGET_IP}$" "$KNOWN_FILE" 2>/dev/null; then
+        echo "$TARGET_IP" >> "$KNOWN_FILE"
+    fi
+
+    # Try ADB connect over port 5555
+    if which adb >/dev/null 2>&1; then
+        adb connect "${TARGET_IP}:${PORT}" 2>/dev/null || true
+    fi
+}
+
+# Network auto-discovery: inspect ARP table and known Wi-Fi IPs
+discover_network_tablets() {
+    local CANDIDATES=()
+
+    # 1. Read from known_tablets.txt
+    if [ -f "$KNOWN_FILE" ]; then
+        while IFS= read -r ip; do
+            ip=$(echo "$ip" | tr -d '\r\n ')
+            [ -n "$ip" ] && CANDIDATES+=("$ip")
+        done < "$KNOWN_FILE"
+    fi
+
+    # 2. Read from ~/.ssh/config
+    if [ -f "$HOME/.ssh/config" ]; then
+        local SSH_IPS=$(awk '/HostName/{print $2}' "$HOME/.ssh/config" 2>/dev/null || true)
+        for ip in $SSH_IPS; do
+            [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && CANDIDATES+=("$ip")
+        done
+    fi
+
+    # 3. Read from ARP / neighbor cache (ip neigh)
+    local NEIGH_IPS=$(ip neigh 2>/dev/null | awk '{print $1}' || true)
+    for ip in $NEIGH_IPS; do
+        [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && CANDIDATES+=("$ip")
+    done
+
+    # Deduplicate candidate IPs
+    local UNIQUE_IPS=($(printf "%s\n" "${CANDIDATES[@]}" | sort -u))
+
+    for IP in "${UNIQUE_IPS[@]}"; do
+        [ -z "$IP" ] && continue
+        # Skip router/gateway and broadcast
+        [[ "$IP" == *".255" || "$IP" == *".0" ]] && continue
+
+        # Check ADB port 5555 or SSH port 22 with fast 0.3s timeout
+        local IS_TABLET=false
+        if nc -z -w 1 "$IP" 5555 2>/dev/null; then
+            IS_TABLET=true
+            # Try auto adb connect
+            adb connect "${IP}:5555" >/dev/null 2>&1 || true
+        elif nc -z -w 1 "$IP" 22 2>/dev/null; then
+            IS_TABLET=true
+        elif ping -c 1 -W 1 "$IP" >/dev/null 2>&1; then
+            # If in known file, treat as valid
+            grep -q "^${IP}$" "$KNOWN_FILE" 2>/dev/null && IS_TABLET=true
+        fi
+
+        if [ "$IS_TABLET" = true ]; then
+            if ! grep -q "^${IP}$" "$KNOWN_FILE" 2>/dev/null; then
+                echo "$IP" >> "$KNOWN_FILE"
+            fi
+        fi
+    done
+}
+
 # Scan all connected devices
 scan_devices() {
     local ACTIVE=$(get_active_device)
     local DEVICES_FOUND=()
 
-    # 1. USB & ADB Connected Devices
+    # Discover network candidates first
+    discover_network_tablets
+
+    # 1. USB & ADB Connected Devices (includes connected Wi-Fi ADB devices)
     local ADB_LIST=$(adb devices 2>/dev/null | grep -E "\b(device|unauthorized|offline)\b" || true)
 
     while IFS= read -r line; do
@@ -51,8 +135,10 @@ scan_devices() {
         [ -z "$DEV_ID" ] && continue
 
         local DEV_TYPE="usb"
+        local IP="Disconnected"
         if [[ "$DEV_ID" =~ [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+ ]]; then
             DEV_TYPE="wifi"
+            IP=$(echo "$DEV_ID" | cut -d':' -f1)
         fi
 
         local MODEL="Unknown"
@@ -61,7 +147,6 @@ scan_devices() {
         local BAT_STAT="?"
         local TEMP="?"
         local ROOT_STATE="no"
-        local IP="?"
 
         if [ "$DEV_STATE" = "device" ]; then
             MODEL=$(adb -s "$DEV_ID" shell getprop ro.product.model 2>/dev/null | tr -d '\r\n')
@@ -95,9 +180,11 @@ scan_devices() {
                 TEMP="Normal"
             fi
 
-            # Wi-Fi IP
-            IP=$(adb -s "$DEV_ID" shell "ip -4 addr show wlan0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n1" | tr -d '\r\n')
-            [ -z "$IP" ] && IP="Disconnected"
+            # Wi-Fi IP if USB connected
+            if [ "$DEV_TYPE" = "usb" ]; then
+                local DETECTED_IP=$(adb -s "$DEV_ID" shell "ip -4 addr show wlan0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n1" | tr -d '\r\n')
+                [ -n "$DETECTED_IP" ] && IP="$DETECTED_IP"
+            fi
         fi
 
         local IS_ACTIVE=false
@@ -109,31 +196,59 @@ scan_devices() {
         DEVICES_FOUND+=("$DEV_ID|$DEV_TYPE|$MODEL|$ANDROID_VER|$BAT_CAP|$BAT_STAT|$TEMP|$ROOT_STATE|$IP|$DEV_STATE|$IS_ACTIVE")
     done <<< "$ADB_LIST"
 
-    # 2. Known Wi-Fi IPs if not in ADB
-    local KNOWN_IPS=()
-    if [ -f "$HOME/.ssh/config" ]; then
-        local SSH_IP=$(awk '/Host my-tablet-server/{flag=1; next} /Host /{flag=0} flag && /HostName/{print $2; exit}' "$HOME/.ssh/config" 2>/dev/null || true)
-        [ -n "$SSH_IP" ] && KNOWN_IPS+=("$SSH_IP")
-    fi
-    [ -f "$CONFIG_DIR/known_tablets.txt" ] && while IFS= read -r ip; do [ -n "$ip" ] && KNOWN_IPS+=("$ip"); done < "$CONFIG_DIR/known_tablets.txt"
+    # 2. Known Wi-Fi IPs that are not yet in ADB
+    if [ -f "$KNOWN_FILE" ]; then
+        while IFS= read -r IP; do
+            IP=$(echo "$IP" | tr -d '\r\n ')
+            [ -z "$IP" ] && continue
 
-    for IP in "${KNOWN_IPS[@]}"; do
-        local ALREADY=false
-        for D in "${DEVICES_FOUND[@]}"; do
-            if [[ "$D" == *"$IP"* ]]; then
-                ALREADY=true
-                break
+            # Check if already added
+            local ALREADY=false
+            for D in "${DEVICES_FOUND[@]}"; do
+                if [[ "$D" == *"$IP"* ]]; then
+                    ALREADY=true
+                    break
+                fi
+            done
+
+            if [ "$ALREADY" = false ]; then
+                if ping -c 1 -W 1 "$IP" >/dev/null 2>&1; then
+                    local DEV_ID="wifi:$IP"
+                    local IS_ACTIVE=false
+                    [ "$DEV_ID" = "$ACTIVE" ] && IS_ACTIVE=true
+
+                    local MODEL="Wi-Fi Tablet"
+                    local ANDROID_VER="Android"
+                    local BAT_CAP="?"
+                    local BAT_STAT="Normal"
+                    local TEMP="Normal"
+                    local ROOT_STATE="unknown"
+
+                    # Try fast SSH inspection if port 22 is open
+                    if nc -z -w 1 "$IP" 22 2>/dev/null; then
+                        local SSH_CHECK=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 root@"$IP" "
+                            cat /sys/class/power_supply/battery/capacity 2>/dev/null || echo '?'
+                            cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null || echo '?'
+                            uname -s 2>/dev/null || echo 'Linux'
+                        " 2>/dev/null || true)
+                        
+                        if [ -n "$SSH_CHECK" ]; then
+                            local S_BAT=$(echo "$SSH_CHECK" | sed -n '1p' | tr -d '\r\n')
+                            local S_TEMP=$(echo "$SSH_CHECK" | sed -n '2p' | tr -d '\r\n')
+                            [[ "$S_BAT" =~ ^[0-9]+$ ]] && BAT_CAP="$S_BAT"
+                            if [[ "$S_TEMP" =~ ^[0-9]+$ ]] && [ "$S_TEMP" -gt 1000 ]; then
+                                TEMP="$(( S_TEMP / 1000 ))°C"
+                            fi
+                            ROOT_STATE="yes"
+                            MODEL="Linux Microserver"
+                        fi
+                    fi
+
+                    DEVICES_FOUND+=("$DEV_ID|wifi|$MODEL|$ANDROID_VER|$BAT_CAP|$BAT_STAT|$TEMP|$ROOT_STATE|$IP|online|$IS_ACTIVE")
+                fi
             fi
-        done
-        if [ "$ALREADY" = false ]; then
-            if ping -c 1 -W 1 "$IP" >/dev/null 2>&1; then
-                local IS_ACTIVE=false
-                local DEV_ID="wifi:$IP"
-                [ "$DEV_ID" = "$ACTIVE" ] && IS_ACTIVE=true
-                DEVICES_FOUND+=("$DEV_ID|wifi|Network Tablet|Android|?|?|Normal|unknown|$IP|online|$IS_ACTIVE")
-            fi
-        fi
-    done
+        done < "$KNOWN_FILE"
+    fi
 
     # Output formatted
     for D in "${DEVICES_FOUND[@]}"; do
@@ -176,7 +291,7 @@ output_table() {
     echo -e "${CYAN}${BOLD}========================================================================================${NC}"
     echo -e "${CYAN}${BOLD}                 📱 MY TABLET SERVER - CONNECTED TABLET DEVICES                          ${NC}"
     echo -e "${CYAN}${BOLD}========================================================================================${NC}"
-    printf "${BOLD}%-3s %-18s %-6s %-18s %-8s %-8s %-6s %-15s %s${NC}\n" "SEL" "DEVICE ID" "TYPE" "MODEL" "BATTERY" "TEMP" "ROOT" "IP" "STATUS"
+    printf "${BOLD}%-3s %-20s %-6s %-18s %-8s %-8s %-6s %-15s %s${NC}\n" "SEL" "DEVICE ID" "TYPE" "MODEL" "BATTERY" "TEMP" "ROOT" "IP" "STATUS"
     echo -e "----------------------------------------------------------------------------------------"
 
     while IFS='|' read -r dev_id dev_type model android_ver bat_cap bat_stat temp root_state ip dev_state is_active; do
@@ -197,12 +312,12 @@ output_table() {
             BAT_COLOR="?"
         fi
 
-        printf "%b %-18s %-6s %-18s %-16b %-8s %-14b %-15s %s\n" "$MARK" "$dev_id" "$dev_type" "$model" "$BAT_COLOR" "$temp" "$ROOT_COLOR" "$ip" "$dev_state"
+        printf "%b %-20s %-6s %-18s %-16b %-8s %-14b %-15s %s\n" "$MARK" "$dev_id" "$dev_type" "$model" "$BAT_COLOR" "$temp" "$ROOT_COLOR" "$ip" "$dev_state"
     done < <(scan_devices)
 
     if [ "$COUNT" -eq 0 ]; then
         echo -e "  ${YELLOW}No tablets currently detected!${NC}"
-        echo -e "  Connect a tablet via USB (enable USB Debugging) or verify Wi-Fi connection."
+        echo -e "  Connect a tablet via USB or run: ${CYAN}tablet devices connect <TABLET_IP>${NC}"
     fi
     echo -e "${CYAN}========================================================================================${NC}"
 }
@@ -225,6 +340,19 @@ case "$1" in
             echo -e "${RED}[ERROR] Device ID required: tablet-devices set-active <device_id>${NC}"
             exit 1
         fi
+        ;;
+    connect|add)
+        if [ -n "$2" ]; then
+            connect_wifi_ip "$2" "${3:-5555}"
+            echo -e "${GREEN}✓ Wi-Fi tablet connected and saved: $2${NC}"
+        else
+            echo -e "${RED}Usage: tablet-devices connect <TABLET_IP> [PORT]${NC}"
+            exit 1
+        fi
+        ;;
+    scan|discover)
+        discover_network_tablets
+        output_table
         ;;
     *)
         output_table

@@ -1,8 +1,11 @@
 [Desktop Entry]
-Name=My Tablet Server - Kontrol Merkezi
+Version=1.0
+Type=Application
+Name=My Tablet Server - Control Center
+GenericName=Tablet Control Center
 Comment=Modern Graphical Multi-Tablet Dashboard & Control Center
-Exec=bash -c "$(dirname "%k")/00-tablet-dashboard.sh"
+Exec=sh -c '"$(dirname "$1")/../../dashboard.sh"' dummy %k
 Icon=preferences-system-devices
 Terminal=false
-Type=Application
-Categories=Utility;System;
+Categories=Utility;System;AudioVideo;
+StartupNotify=true

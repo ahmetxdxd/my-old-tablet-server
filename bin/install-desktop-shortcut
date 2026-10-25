@@ -3,10 +3,10 @@
 # MY TABLET SERVER - Desktop Shortcut Installer
 # ==============================================================================
 # Installs one-click launcher shortcuts on the user's Desktop and App Menu.
+# Handles whitespace in folder paths properly per Freedesktop specs.
 # ==============================================================================
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd || echo "")"
-ICON_PATH="$DIR/packages/icon.png"
 
 GREEN='\033[01;32m'
 BLUE='\033[01;34m'
@@ -45,7 +45,8 @@ Type=Application
 Name=My Tablet Server
 GenericName=Tablet Control Center
 Comment=Manage legacy Android tablets as secondary monitors, audio speakers and Linux microservers
-Exec=$DIR/bin/tablet-dashboard
+Exec=\"$DIR/bin/tablet-dashboard\"
+Path=\"$DIR\"
 Icon=preferences-system-devices
 Terminal=false
 Categories=Utility;System;AudioVideo;
@@ -60,7 +61,7 @@ chmod +x "$DESKTOP_FILE"
 echo "$CONTENT" > "$APP_FILE"
 chmod +x "$APP_FILE"
 
-# Trust desktop file on GNOME/KDE if gio or update-desktop-database is available
+# Trust desktop file on GNOME/KDE
 which gio >/dev/null 2>&1 && gio set "$DESKTOP_FILE" metadata::trusted true 2>/dev/null || true
 which update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APP_DIR" 2>/dev/null || true
 

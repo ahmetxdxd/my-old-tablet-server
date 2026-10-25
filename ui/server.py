@@ -108,6 +108,23 @@ class TabletServerHandler(SimpleHTTPRequestHandler):
                 self.send_json({"success": False, "message": "No device_id provided"}, status=400)
             return
 
+        elif path == "/api/connect_wifi":
+            ip = body.get("ip", "").strip()
+            port = body.get("port", "5555")
+            if ip:
+                dev_script = os.path.join(BIN_DIR, "tablet-devices")
+                success, out = self.run_cmd([dev_script, "connect", ip, str(port)])
+                self.send_json({"success": success, "message": out})
+            else:
+                self.send_json({"success": False, "message": "IP address is required"}, status=400)
+            return
+
+        elif path == "/api/scan_network":
+            dev_script = os.path.join(BIN_DIR, "tablet-devices")
+            success, out = self.run_cmd([dev_script, "scan"])
+            self.send_json({"success": success, "message": "Network scan completed"})
+            return
+
         elif path == "/api/action":
             action = body.get("action", "")
             target_device = body.get("device_id", "")
