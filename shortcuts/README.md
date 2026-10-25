@@ -1,17 +1,25 @@
-# ⚡ My Tablet Server - One-Click Desktop Shortcuts
+# ⚡ My Tablet Server - One-Click Shortcuts
 
 This folder contains double-clickable shortcuts to manage and trigger all tablet features **silently in the background without opening a terminal window**.
+
+---
+
+## 📁 Directory Structure
+
+* **🐧 [`linux/`](linux)**: Contains all `.sh` shortcuts for Linux & macOS desktop environments (KDE Plasma, GNOME, XFCE, etc.).
+* **🪟 [`windows/`](windows)**: Contains all `.bat` shortcuts for Windows (PowerShell hidden window style).
 
 ---
 
 ## 🖥️ How to Use
 
 ### 🐧 On Linux & macOS:
-- Double-click any **`.desktop`** or **`.sh`** file from your file manager (Dolphin, Nautilus, Thunar, etc.).
+- Open [`shortcuts/linux/`](linux).
+- Double-click any **`.sh`** file from your file manager (Dolphin, Nautilus, Thunar, etc.) or run it from terminal.
 - The action will start **silently in the background** without cluttering your screen with terminal windows, and will display a native desktop notification (`notify-send`).
-- You can also copy any of these `.desktop` shortcuts directly to your desktop (`~/Desktop`).
 
 ### 🪟 On Windows:
+- Open [`shortcuts/windows/`](windows).
 - Double-click any **`.bat`** file.
 - The action runs invisibly in the background (`-WindowStyle Hidden`) without opening a persistent command prompt.
 
@@ -19,12 +27,12 @@ This folder contains double-clickable shortcuts to manage and trigger all tablet
 
 ## 📂 Available Shortcuts
 
-| File | Function |
+| File Name | Function |
 | :--- | :--- |
 | `01-second-screen-usb` | **Instantly turns tablet into PC second monitor via USB cable (no terminal window!)** |
 | `02-second-screen-wifi` | Turns tablet into wireless second monitor over home Wi-Fi |
 | `03-second-screen-stop` | Closes second monitor and restores tablet home launcher |
-| `04-stereo-speakers-start` | Streams PC stereo audio (Left & Right channel split) to tablet speakers |
+| `04-stereo-speakers-start` | Streams PC stereo audio to tablet speakers (Direct PipeWire PCM / Snapcast) |
 | `05-stereo-speakers-stop` | Stops tablet stereo speaker stream |
 | `06-cava-audio-visualizer` | Opens CAVA live audio frequency visualizer in a clean terminal window |
 | `07-screensaver-frutiger-aero` | Starts glossy nostalgic Frutiger Aero dynamic art slideshow |

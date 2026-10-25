@@ -59,17 +59,24 @@ detect_tablet() {
         fi
     done
 
-    # Check Wi-Fi Vestel Tablet (192.168.1.111)
-    if ping -c 1 -W 1 192.168.1.111 >/dev/null 2>&1; then
-        echo "wifi:192.168.1.111"
+    # Check Wi-Fi tablet from ~/.ssh/config or default
+    local TARGET_IP=""
+    if [ -f "$HOME/.ssh/config" ]; then
+        TARGET_IP=$(awk '/Host my-tablet-server/{flag=1; next} /Host /{flag=0} flag && /HostName/{print $2; exit}' "$HOME/.ssh/config" 2>/dev/null || true)
+    fi
+    [ -z "$TARGET_IP" ] && TARGET_IP="192.168.1.105"
+
+    if ping -c 1 -W 1 "$TARGET_IP" >/dev/null 2>&1; then
+        echo "wifi:$TARGET_IP"
         return
     fi
 
-    # Check Wi-Fi Samsung Tablet (192.168.1.109)
-    if ping -c 1 -W 1 192.168.1.109 >/dev/null 2>&1; then
-        echo "wifi:192.168.1.109"
-        return
-    fi
+    for IP in 192.168.1.105 192.168.1.109 192.168.1.111; do
+        if ping -c 1 -W 1 "$IP" >/dev/null 2>&1; then
+            echo "wifi:$IP"
+            return
+        fi
+    done
 
     echo "none"
 }
@@ -170,47 +177,53 @@ start_second_screen() {
             ;;
     esac
 
-    kscreen-doctor output.Virtual-TabletEkran.position.${POS_X},${POS_Y} >/dev/null 2>&1 || true
+    # Ensure PC primary display is ALWAYS enabled and untouched
+    local PRIM_OUTPUT=$(kscreen-doctor -o 2>/dev/null | grep -E '^Output: [0-9]+' | grep -v 'Virtual-' | awk '{print $3}' | head -n1 || echo "eDP-1")
+    kscreen-doctor output.${PRIM_OUTPUT}.enable output.${PRIM_OUTPUT}.position.0,0 output.Virtual-TabletEkran.enable output.Virtual-TabletEkran.position.${POS_X},${POS_Y} >/dev/null 2>&1 || true
     log_ok "Ekran konumu ayarlandı: X=$POS_X, Y=$POS_Y"
 
-    # 5. Launch bVNC on tablet
+    # 5. Optimize bVNC settings and launch on tablet
     local PC_IP=$(get_pc_ip)
     local CONNECT_URL=""
     local USE_SSH_TUNNEL=0
+    local OPT_DB="$DIR/config/VncDatabase.optimized"
+
+    # Inject optimized 8-bit color, 1:1 scale, view-only, and local hardware cursor database if attached via ADB
+    if [ -f "$OPT_DB" ] && [ -n "$TARGET_ID" ] && [ "$TARGET_TYPE" = "usb" ]; then
+        adb -s "$TARGET_ID" push "$OPT_DB" /data/local/tmp/VncDatabase >/dev/null 2>&1 || true
+        adb -s "$TARGET_ID" shell "su -c 'cp /data/local/tmp/VncDatabase /data/data/com.iiordanov.freebVNC/databases/VncDatabase && chown u0_a183:u0_a183 /data/data/com.iiordanov.freebVNC/databases/VncDatabase 2>/dev/null || true; chmod 600 /data/data/com.iiordanov.freebVNC/databases/VncDatabase 2>/dev/null || true; rm -f /data/local/tmp/VncDatabase'" >/dev/null 2>&1 || true
+    fi
 
     pkill -f "ssh.*-R $PORT:127.0.0.1:$PORT" 2>/dev/null || true
 
     if [ "$CONN_MODE" = "usb" ]; then
         log_info "USB Kablo Modu: Bağlantı kuruluyor..."
-        # Android 4.4 'adb reverse' desteklemez; adb forward ise hosttan tablete yönlendirir.
-        # Bu yüzden bağlantı USB üzerinden yönlendirilen SSH reverse tüneli (-R 5900:127.0.0.1:5900)
-        # veya yerel Wi-Fi IP üzerinden kurulmalıdır.
         adb -s "$TARGET_ID" forward tcp:2222 tcp:22 2>/dev/null || adb forward tcp:2222 tcp:22 2>/dev/null || true
-        if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -p 2222 -q root@127.0.0.1 "exit" 2>/dev/null; then
-            log_info "USB üzerinden SSH reverse tüneli oluşturuluyor ($PORT:127.0.0.1:$PORT)..."
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ExitOnForwardFailure=no -o ConnectTimeout=3 -f -N -p 2222 -R $PORT:127.0.0.1:$PORT root@127.0.0.1 2>/dev/null || true
-            CONNECT_URL="vnc://$PASSWORD@127.0.0.1:$PORT"
+        if ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -p 2222 -q root@127.0.0.1 "exit" 2>/dev/null; then
+            log_info "USB üzerinden SSH reverse tüneli oluşturuluyor ($PORT:127.0.0.1:$PORT, ultra hızlı mod)..."
+            ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o ExitOnForwardFailure=no -o ConnectTimeout=3 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes -o Compression=no -f -N -p 2222 -R $PORT:127.0.0.1:$PORT root@127.0.0.1 2>/dev/null || true
+            CONNECT_URL="vnc://127.0.0.1:$PORT/?VncPassword=$PASSWORD"
             USE_SSH_TUNNEL=1
-            log_ok "SSH Reverse Tüneli aktif (Host UFW engeli aşıldı, 127.0.0.1:$PORT)."
+            log_ok "SSH Reverse Tüneli aktif (Ultra Hızlı 8-bit / ZRLE / Salt Okunur Monitör Modu)."
         else
             log_warn "Tablette SSH servisi bulunamadı, doğrudan LAN IP ($PC_IP:$PORT) deneniyor..."
-            CONNECT_URL="vnc://$PASSWORD@$PC_IP:$PORT"
+            CONNECT_URL="vnc://$PC_IP:$PORT/?VncPassword=$PASSWORD"
         fi
 
-        adb -s "$TARGET_ID" shell "am start -a android.intent.action.VIEW -d '$CONNECT_URL'" >/dev/null 2>&1 || \
-        adb shell "am start -a android.intent.action.VIEW -d '$CONNECT_URL'" >/dev/null 2>&1 || true
+        adb -s "$TARGET_ID" shell "am force-stop com.iiordanov.freebVNC && am start -n com.iiordanov.freebVNC/com.iiordanov.bVNC.RemoteCanvasActivity -d '$CONNECT_URL'" >/dev/null 2>&1 || \
+        adb shell "am force-stop com.iiordanov.freebVNC && am start -n com.iiordanov.freebVNC/com.iiordanov.bVNC.RemoteCanvasActivity -d '$CONNECT_URL'" >/dev/null 2>&1 || true
         log_ok "USB bağlantı isteği gönderildi."
     else
         log_info "Kablosuz Wi-Fi Modu hazırlanıyor..."
-        if [ "$TARGET_TYPE" = "wifi" ] && ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -q root@$TARGET_ID "exit" 2>/dev/null; then
-            log_info "Wi-Fi üzerinden SSH reverse tüneli kuruluyor ($PORT:127.0.0.1:$PORT)..."
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ExitOnForwardFailure=no -o ConnectTimeout=3 -f -N -R $PORT:127.0.0.1:$PORT root@$TARGET_ID 2>/dev/null || true
-            CONNECT_URL="vnc://$PASSWORD@127.0.0.1:$PORT"
+        if [ "$TARGET_TYPE" = "wifi" ] && ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -q root@$TARGET_ID "exit" 2>/dev/null; then
+            log_info "Wi-Fi üzerinden SSH reverse tüneli kuruluyor ($PORT:127.0.0.1:$PORT, ultra hızlı mod)..."
+            ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o ExitOnForwardFailure=no -o ConnectTimeout=3 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes -o Compression=no -f -N -R $PORT:127.0.0.1:$PORT root@$TARGET_ID 2>/dev/null || true
+            CONNECT_URL="vnc://127.0.0.1:$PORT/?VncPassword=$PASSWORD"
             USE_SSH_TUNNEL=1
-            log_ok "SSH Reverse Tüneli aktif (Host UFW engeli aşıldı, 127.0.0.1:$PORT)."
+            log_ok "SSH Reverse Tüneli aktif (Ultra Hızlı 8-bit / ZRLE / Salt Okunur Monitör Modu)."
         else
-            CONNECT_URL="vnc://$PASSWORD@$PC_IP:$PORT"
-            log_info "PC IP: $PC_IP:$PORT üzerinden bağlanılıyor..."
+            CONNECT_URL="vnc://$PC_IP:$PORT/?VncPassword=$PASSWORD"
+            log_info "PC IP: $PC_IP:$PORT üzerinden bağlanılıyor (16-bit Renk)..."
         fi
 
         if [ "$TARGET_TYPE" = "wifi" ]; then
@@ -220,10 +233,11 @@ start_second_screen() {
                 export BOOTCLASSPATH=/system/framework/core.jar:/system/framework/conscrypt.jar:/system/framework/core-junit.jar:/system/framework/bouncycastle.jar:/system/framework/ext.jar:/system/framework/framework.jar:/system/framework/framework2.jar:/system/framework/twframework.jar:/system/framework/android.policy.jar:/system/framework/services.jar:/system/framework/apache-xml.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/mms-common.jar:/system/framework/webviewchromium.jar:/system/framework/sec_edm.jar:/system/framework/com.android.location.provider.jar:/system/framework/input.jar:/system/framework/okhttp.jar
                 export LD_LIBRARY_PATH=/vendor/lib:/system/lib:/lib
                 export PATH=/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin:$PATH
-                /system/bin/am start -a android.intent.action.VIEW -d "'"$CONNECT_URL"'" >/dev/null 2>&1
+                /system/bin/am force-stop com.iiordanov.freebVNC >/dev/null 2>&1 || true
+                /system/bin/am start -n com.iiordanov.freebVNC/com.iiordanov.bVNC.RemoteCanvasActivity -d "'"$CONNECT_URL"'" >/dev/null 2>&1
             ' >/dev/null 2>&1 || true
         else
-            adb shell "am start -a android.intent.action.VIEW -d '$CONNECT_URL'" >/dev/null 2>&1 || true
+            adb shell "am force-stop com.iiordanov.freebVNC && am start -n com.iiordanov.freebVNC/com.iiordanov.bVNC.RemoteCanvasActivity -d '$CONNECT_URL'" >/dev/null 2>&1 || true
         fi
         log_ok "Wi-Fi bağlantısı tamamlandı."
     fi
@@ -248,9 +262,14 @@ stop_second_screen() {
     fi
 
     systemctl --user stop tablet-screen 2>/dev/null || true
-    pkill -9 -f krfb-virtualmonitor 2>/dev/null || true
+    systemctl --user reset-failed tablet-screen 2>/dev/null || true
+    killall -9 krfb-virtualmonitor 2>/dev/null || true
     pkill -f "ssh.*-R $PORT:127.0.0.1:$PORT" 2>/dev/null || true
     pkill -f "ssh.*-R 5900:127.0.0.1:5900" 2>/dev/null || true
+
+    # Ensure PC primary display remains active and in position 0,0
+    local PRIM_OUTPUT=$(kscreen-doctor -o 2>/dev/null | grep -E '^Output: [0-9]+' | grep -v 'Virtual-' | awk '{print $3}' | head -n1 || echo "eDP-1")
+    kscreen-doctor output.${PRIM_OUTPUT}.enable output.${PRIM_OUTPUT}.position.0,0 >/dev/null 2>&1 || true
 
     # Close bVNC on connected ADB tablets
     for DEV in $(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}'); do
@@ -260,8 +279,14 @@ stop_second_screen() {
         fi
     done
 
-    if ping -c 1 -W 1 192.168.1.109 >/dev/null 2>&1; then
-        ssh -o StrictHostKeyChecking=no root@192.168.1.109 '
+    local TARGET_IP=""
+    if [ -f "$HOME/.ssh/config" ]; then
+        TARGET_IP=$(awk '/Host my-tablet-server/{flag=1; next} /Host /{flag=0} flag && /HostName/{print $2; exit}' "$HOME/.ssh/config" 2>/dev/null || true)
+    fi
+    [ -z "$TARGET_IP" ] && TARGET_IP="192.168.1.105"
+
+    if ping -c 1 -W 1 "$TARGET_IP" >/dev/null 2>&1; then
+        ssh -o StrictHostKeyChecking=no root@$TARGET_IP '
             export ANDROID_ROOT=/system
             export ANDROID_DATA=/data
             export BOOTCLASSPATH=/system/framework/core.jar:/system/framework/conscrypt.jar:/system/framework/core-junit.jar:/system/framework/bouncycastle.jar:/system/framework/ext.jar:/system/framework/framework.jar:/system/framework/framework2.jar:/system/framework/twframework.jar:/system/framework/android.policy.jar:/system/framework/services.jar:/system/framework/apache-xml.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/mms-common.jar:/system/framework/webviewchromium.jar:/system/framework/sec_edm.jar:/system/framework/com.android.location.provider.jar:/system/framework/input.jar:/system/framework/okhttp.jar

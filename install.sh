@@ -256,7 +256,9 @@ ln -sf "$DIR/bin/tablet" "$HOME/.local/bin/tablet" 2>/dev/null || true
 ln -sf "$DIR/bin/tablet-terminal" "$HOME/.local/bin/tablet-terminal" 2>/dev/null || true
 ln -sf "$DIR/bin/tablet-terminal" "$HOME/.local/bin/tablet-term" 2>/dev/null || true
 ln -sf "$DIR/bin/tablet-menu" "$HOME/.local/bin/tablet-menu" 2>/dev/null || true
-echo -e "${GREEN}✓ PC Shortcuts installed to ~/.local/bin (tablet, tablet-terminal, tablet-menu).${NC}"
+ln -sf "$DIR/shortcuts/linux/.run_silent.sh" "$HOME/.local/bin/tablet-action" 2>/dev/null || true
+chmod +x "$DIR/shortcuts/linux"/*.sh "$DIR/shortcuts/linux/.run_silent.sh" 2>/dev/null || true
+echo -e "${GREEN}✓ PC Shortcuts installed to ~/.local/bin (tablet, tablet-terminal, tablet-menu, tablet-action).${NC}"
 
 "$DIR/bin/sync-wifi" || true
 

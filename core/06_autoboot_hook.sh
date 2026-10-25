@@ -53,8 +53,8 @@ mount -o bind /dev/pts $R/dev/pts 2>/dev/null || mount -t devpts devpts $R/dev/p
 chmod 666 $R/dev/ptmx 2>/dev/null || true
 mount -o bind /system $R/system 2>/dev/null || true
 mount -o bind /data $R/data 2>/dev/null || true
-$B mount --bind /data/data $R/android_data 2>/dev/null || true
-$B mount --bind /data/media/0 $R/sdcard 2>/dev/null || true
+mount -o bind /data/data $R/android_data 2>/dev/null || $B mount --bind /data/data $R/android_data 2>/dev/null || true
+mount -o bind /data/media/0 $R/sdcard 2>/dev/null || $B mount --bind /data/media/0 $R/sdcard 2>/dev/null || true
 
 # 6. Start Android Audio Bridge
 if [ -f "/data/local/start_audio_bridge.sh" ]; then

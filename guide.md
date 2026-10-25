@@ -85,7 +85,7 @@ You can manage the tablet completely from your PC without entering the tablet te
 ### ⚡ 1. One-Click Tablet Terminal
 ```bash
 tablet-terminal
-# Or on Windows, double-click: shortcuts\21-tablet-terminal.bat
+# Or on Windows, double-click: shortcuts\windows\21-tablet-terminal.bat
 ```
 - No need to look up IPs, ports, or enter SSH passwords.
 - Auto-detects USB cable or Wi-Fi, and automatically connects to the live synced console.
@@ -93,7 +93,7 @@ tablet-terminal
 ### 🎛️ 2. Interactive Quick Control Menu
 ```bash
 tablet-menu
-# Or on Windows, double-click: shortcuts\20-tablet-menu.bat
+# Or on Windows, double-click: shortcuts\windows\20-tablet-menu.bat
 ```
 - Lets you trigger second monitor, stereo speakers, screensavers, debloat, and modes from an interactive numbered menu.
 
@@ -109,8 +109,8 @@ tablet <command>               # Run any README command without entering tablet
 
 ### 🖱️ 4. One-Click Desktop Shortcuts (Zero Terminal Window)
 Use the **`shortcuts/`** folder to trigger any feature without seeing a terminal window:
-- **Linux/macOS:** Double-click `.desktop` or `.sh` files (e.g. `01-second-screen-usb.desktop`) for background execution with desktop notifications (`notify-send`).
-- **Windows:** Double-click `.bat` files for windowless background execution.
+- **Linux/macOS:** Double-click `.desktop` or `.sh` files in [`shortcuts/linux/`](shortcuts/linux) (e.g. `01-second-screen-usb.desktop`) for background execution with desktop notifications (`notify-send`).
+- **Windows:** Double-click `.bat` files in [`shortcuts/windows/`](shortcuts/windows) for windowless background execution.
 - Contains all tools including `tablet-menu` and `tablet-terminal`!
 
 ---

@@ -21,6 +21,12 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 detect_target() {
+    # 0. Check if running directly inside tablet
+    if [ -f "/etc/alpine-release" ] || [ -f "/system/bin/am" ] || ! command -v adb >/dev/null 2>&1; then
+        echo "local:"
+        return
+    fi
+
     # 1. Check USB tablet first (skip phones)
     for DEV in $(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}'); do
         local MODEL=$(adb -s "$DEV" shell "getprop ro.product.model" 2>/dev/null | tr -d '\r\n')
@@ -52,6 +58,14 @@ run_on_tablet() {
     local T_ID=$(echo "$TARGET" | cut -d':' -f2)
 
     case "$T_TYPE" in
+        local)
+            export ANDROID_ROOT=/system
+            export ANDROID_DATA=/data
+            export BOOTCLASSPATH=/system/framework/core.jar:/system/framework/conscrypt.jar:/system/framework/core-junit.jar:/system/framework/bouncycastle.jar:/system/framework/ext.jar:/system/framework/framework.jar:/system/framework/framework2.jar:/system/framework/twframework.jar:/system/framework/android.policy.jar:/system/framework/services.jar:/system/framework/apache-xml.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/mms-common.jar:/system/framework/webviewchromium.jar:/system/framework/sec_edm.jar:/system/framework/com.android.location.provider.jar:/system/framework/input.jar:/system/framework/okhttp.jar
+            export LD_LIBRARY_PATH=/vendor/lib:/system/lib:/lib
+            export PATH=/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin:$PATH
+            eval "$CMD"
+            ;;
         adb)
             adb -s "$T_ID" shell "$CMD"
             ;;

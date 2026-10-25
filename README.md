@@ -112,8 +112,8 @@ tablet-terminal
 
 ```cmd
 :: On Windows:
-:: Simply double-click 'shortcuts\21-tablet-terminal.bat' or run:
-.\shortcuts\21-tablet-terminal.bat
+:: Simply double-click 'shortcuts\windows\21-tablet-terminal.bat' or run:
+.\shortcuts\windows\21-tablet-terminal.bat
 ```
 * **Auto-Discovery:** Automatically detects connected USB cable (port forward 2222) or Wi-Fi LAN IP.
 * **Failsafe:** Seamlessly falls back to direct ADB chroot console if SSH server is temporarily offline.
@@ -129,8 +129,8 @@ tablet-menu
 
 ```cmd
 :: On Windows:
-:: Simply double-click 'shortcuts\20-tablet-menu.bat' or run:
-.\shortcuts\20-tablet-menu.bat
+:: Simply double-click 'shortcuts\windows\20-tablet-menu.bat' or run:
+.\shortcuts\windows\20-tablet-menu.bat
 ```
 * **One-Click Execution:** Second monitor, stereo speakers, screensavers (Frutiger Aero, Aquarium, Fireplace), debloater, modes, and media tools without touching tablet screen.
 
@@ -156,10 +156,10 @@ tablet screen off        # Turn off LCD backlight for power saving
 tablet <any-command>     # Executes directly inside tablet Linux
 ```
 ### 🖱️ 4. One-Click Desktop Shortcuts (Zero Terminal Window)
-To trigger actions without opening or seeing any terminal window, use the **[`shortcuts/`](shortcuts)** folder!
+To trigger actions without opening or seeing any terminal window, use the **[`shortcuts/`](shortcuts)** folder:
 
-* **🐧 On Linux & macOS:** Double-click any `.desktop` or `.sh` file inside the [`shortcuts/`](shortcuts) folder. No terminal window will appear; the task starts silently in the background and pops up a desktop notification (`notify-send`) (e.g. `01-second-screen-usb.desktop`).
-* **🪟 On Windows:** Double-click any `.bat` file in [`shortcuts/`](shortcuts). It runs silently in the background without opening a command prompt window (`-WindowStyle Hidden`).
+* **🐧 On Linux & macOS:** Double-click any `.desktop` or `.sh` file inside the [`shortcuts/linux/`](shortcuts/linux) folder. No terminal window will appear; the task starts silently in the background and pops up a desktop notification (`notify-send`) (e.g. `01-second-screen-usb.desktop`).
+* **🪟 On Windows:** Double-click any `.bat` file in [`shortcuts/windows/`](shortcuts/windows). It runs silently in the background without opening a command prompt window (`-WindowStyle Hidden`).
 
 | Shortcut | Action on Double-Click |
 | :--- | :--- |

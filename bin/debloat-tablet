@@ -91,6 +91,34 @@ echo "         MY TABLET SERVER - TABLET OPTIMIZER & DEBLOATER             "
 echo "======================================================================"
 echo -e "${NC}"
 
+# Check environment
+if [ -f "/etc/alpine-release" ] || [ -f "/system/bin/pm" ] || ! command -v adb >/dev/null 2>&1; then
+    export ANDROID_ROOT=/system
+    export ANDROID_DATA=/data
+    export BOOTCLASSPATH=/system/framework/core.jar:/system/framework/conscrypt.jar:/system/framework/core-junit.jar:/system/framework/bouncycastle.jar:/system/framework/ext.jar:/system/framework/framework.jar:/system/framework/framework2.jar:/system/framework/twframework.jar:/system/framework/android.policy.jar:/system/framework/services.jar:/system/framework/apache-xml.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/mms-common.jar:/system/framework/webviewchromium.jar:/system/framework/sec_edm.jar:/system/framework/com.android.location.provider.jar:/system/framework/input.jar:/system/framework/okhttp.jar
+    export LD_LIBRARY_PATH=/vendor/lib:/system/lib:/lib
+    export PATH=/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin:$PATH
+
+    echo -e "${BLUE}[BİLGİ] Yerel tablet optimizasyonu başlatılıyor...${NC}"
+    BLOCKED_COUNT=0
+    for PKG in $BLOAT_PACKAGES; do
+        /system/bin/pm block $PKG 2>/dev/null || /system/bin/pm disable $PKG 2>/dev/null || true
+        /system/bin/am force-stop $PKG 2>/dev/null || true
+        BLOCKED_COUNT=$((BLOCKED_COUNT + 1))
+    done
+
+    settings put global window_animation_scale 0.5 2>/dev/null || true
+    settings put global transition_animation_scale 0.5 2>/dev/null || true
+    settings put global animator_duration_scale 0.5 2>/dev/null || true
+    settings put global wifi_sleep_policy 2 2>/dev/null || true
+    settings put system screen_off_timeout 600000 2>/dev/null || true
+    settings put system screen_brightness_mode 0 2>/dev/null || true
+    settings put global stay_on_while_plugged_in 3 2>/dev/null || true
+
+    echo -e "${GREEN}[TAMAM] ✓ $BLOCKED_COUNT gereksiz servis donduruldu, RAM serbest bırakıldı.${NC}"
+    exit 0
+fi
+
 for DEV in $(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}'); do
     MODEL=$(adb -s "$DEV" shell "getprop ro.product.model" 2>/dev/null | tr -d '\r\n')
     if [[ "$MODEL" =~ "SM-G"|"SM-S"|"SM-A"|"iPhone" ]]; then

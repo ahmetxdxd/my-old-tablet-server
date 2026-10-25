@@ -4,6 +4,8 @@ PermitRootLogin yes
 PubkeyAuthentication yes
 PasswordAuthentication yes
 PermitEmptyPasswords no
+AllowTcpForwarding yes
+GatewayPorts yes
 UseDNS no
 Subsystem sftp /usr/lib/ssh/sftp-server
 AcceptEnv LANG LC_*

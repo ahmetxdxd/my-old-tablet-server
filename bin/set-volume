@@ -15,5 +15,14 @@ LEVEL=$(( (PERCENT * 15) / 100 ))
 if [ "$LEVEL" -gt 15 ]; then LEVEL=15; fi
 if [ "$LEVEL" -lt 0 ]; then LEVEL=0; fi
 
-/system/bin/media volume --stream 3 --set "$LEVEL" 2>/dev/null || true
+# Android 4.4 KitKat Settings Provider (Hardware speaker volume)
+settings put system volume_music "$LEVEL" 2>/dev/null || true
+settings put system volume_music_speaker "$LEVEL" 2>/dev/null || true
+
+# If running on host PC with adb connected tablet
+if command -v adb >/dev/null 2>&1; then
+    for DEV in $(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}'); do
+        adb -s "$DEV" shell "settings put system volume_music $LEVEL; settings put system volume_music_speaker $LEVEL" 2>/dev/null || true
+    done
+fi
 echo "[Volume] Set to $PERCENT% (Hardware level: $LEVEL/15)."

@@ -83,10 +83,12 @@ start_screensaver() {
     # Copy video to target active location
     mkdir -p "$(dirname "$TARGET_VIDEO")" 2>/dev/null || true
     cp -f "$VIDEO_SRC" "$TARGET_VIDEO" 2>/dev/null || true
+    chmod 666 "$TARGET_VIDEO" 2>/dev/null || true
 
     # Update XML preferences
     if [ -n "$PREFS_XML" ] && [ -f "$PREFS_XML" ]; then
         sed -i "s|<string name=\"videos\">.*</string>|<string name=\"videos\">file://$VIDEO_SRC</string>|" "$PREFS_XML" 2>/dev/null || true
+        chmod 666 "$PREFS_XML" 2>/dev/null || true
     fi
 
     # Kill existing screensaver instance cleanly

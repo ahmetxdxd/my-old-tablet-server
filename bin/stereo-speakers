@@ -61,12 +61,13 @@ ensure_library_deps() {
 ensure_snapserver_bin() {
     if which snapserver >/dev/null 2>&1; then
         SNAP_BIN="snapserver"
+        MODE="snapcast"
     elif [ -x "$DIR/bin/snapserver" ]; then
         SNAP_BIN="$DIR/bin/snapserver"
+        MODE="snapcast"
     else
-        log_err "Snapserver ikili dosyası bulunamadı!"
-        echo "Lütfen 'paru -S snapcast' veya 'sudo pacman -S snapcast' komutuyla kurun."
-        exit 1
+        SNAP_BIN=""
+        MODE="direct"
     fi
 }
 
@@ -168,11 +169,7 @@ start_speakers() {
     local PC_IP=$(get_pc_ip)
 
     # 1. Stop old instances
-    if pgrep -f "snapserver.*snapserver.conf" >/dev/null 2>&1; then
-        log_warn "Eski Snapserver sonlandırılıyor..."
-        pkill -f "snapserver.*snapserver.conf" 2>/dev/null || true
-        sleep 1
-    fi
+    stop_speakers silent
 
     # 2. Check Firewall (UFW)
     if which ufw >/dev/null 2>&1 && systemctl is-active ufw 2>/dev/null | grep -q "active"; then
@@ -181,64 +178,88 @@ start_speakers() {
         echo -e "   ${YELLOW}sudo ufw allow 1704/tcp && sudo ufw allow 1780/tcp${NC}"
     fi
 
-    # 3. Start Snapserver in background
-    log_info "Snapserver ana akış sunucusu başlatılıyor..."
-    export LD_LIBRARY_PATH="$DIR/lib:$LD_LIBRARY_PATH"
-    setsid "$SNAP_BIN" -c "$CONF_FILE" > "$LOG_FILE" 2>&1 &
-    local SERVER_PID=$!
-    sleep 1
-
-    if ! pgrep -f "snapserver.*snapserver.conf" >/dev/null 2>&1; then
-        log_err "Snapserver başlatılamadı! Log inceleniyor:"
-        cat "$LOG_FILE" | tail -n 15
-        exit 1
-    fi
-    log_ok "Snapserver aktif (Port: 1704, Web UI: http://$PC_IP:1780)"
-
-    # 4. Connect Samsung Galaxy Tab 3 (Sol Kanal / Left Channel)
-    log_info "Samsung Galaxy Tab 3 (Sol Kanal) hazırlanıyor..."
-    pkill -f "ssh.*-R 1704:127.0.0.1:1704" 2>/dev/null || true
-
     local USB_DEV=$(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1)
-    local SSH_CMD="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3"
-    local CONNECTED_SSH=0
+    local SSH_CMD="ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3"
 
-    # Ensure AudioBridge is running on tablet
+    # Ensure AudioBridge is running on tablet and hardware volume is active
     if [ -n "$USB_DEV" ]; then
-        adb -s "$USB_DEV" shell "sh /data/local/start_audio_bridge.sh" >/dev/null 2>&1 || true
+        adb -s "$USB_DEV" shell "su -c 'sh /data/local/start_audio_bridge.sh'" >/dev/null 2>&1 || true
+        adb -s "$USB_DEV" shell "settings put system volume_music 12; settings put system volume_music_speaker 15" >/dev/null 2>&1 || true
     fi
 
-    # Try USB forwarded SSH first
-    if [ -n "$USB_DEV" ]; then
-        adb -s "$USB_DEV" forward tcp:2222 tcp:22 2>/dev/null || true
-        if $SSH_CMD -p 2222 -q root@127.0.0.1 "exit" 2>/dev/null; then
-            log_info "USB üzerinden SSH reverse tüneli kuruluyor (-R 1704:127.0.0.1:1704)..."
-            $SSH_CMD -o ExitOnForwardFailure=no -f -N -p 2222 -R 1704:127.0.0.1:1704 root@127.0.0.1 2>/dev/null || true
-            $SSH_CMD -p 2222 root@127.0.0.1 "pkill -f snapclient 2>/dev/null || true" 2>/dev/null || true
-            $SSH_CMD -p 2222 root@127.0.0.1 "nohup sh -c 'snapclient --player file:filename=stdout tcp://127.0.0.1:1704 2>/dev/null | nc 127.0.0.1 4711 >/dev/null 2>&1' >/dev/null 2>&1 &" 2>/dev/null || true
-            CONNECTED_SSH=1
-            log_ok "Samsung Tab 3 USB üzerinden ses köprüsüne bağlandı (UFW engeli aşıldı)."
+    if [ "$MODE" = "direct" ]; then
+        log_info "Snapserver bulunamadı. Doğrudan PipeWire -> AudioBridge Düşük Gecikmeli PCM Akış Modu başlatılıyor..."
+        
+        # Connect to tablet port 4711
+        if [ -n "$USB_DEV" ]; then
+            log_info "USB Kablo Modu: Port yönlendirmesi yapılıyor (4711 -> 4711)..."
+            adb -s "$USB_DEV" forward tcp:4711 tcp:4711 2>/dev/null || true
+            log_ok "USB ses tüneli hazır."
+        else
+            log_info "Wi-Fi Modu: SSH yerel tüneli kuruluyor (-L 4711:127.0.0.1:4711)..."
+            $SSH_CMD -f -N -L 4711:127.0.0.1:4711 my-tablet-server 2>/dev/null || true
+            log_ok "Wi-Fi ses tüneli hazır."
         fi
-    fi
 
-    # If USB SSH not established, try Wi-Fi SSH (my-tablet-server)
-    if [ "$CONNECTED_SSH" -eq 0 ]; then
-        log_info "Wi-Fi üzerinden SSH reverse tüneli kuruluyor (-R 1704:127.0.0.1:1704)..."
-        ssh -o StrictHostKeyChecking=no -o ExitOnForwardFailure=no -o ConnectTimeout=3 -f -N -R 1704:127.0.0.1:1704 my-tablet-server 2>/dev/null || true
-        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 my-tablet-server "pkill -f snapclient 2>/dev/null || true" 2>/dev/null || true
-        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 my-tablet-server "nohup sh -c 'snapclient --player file:filename=stdout tcp://127.0.0.1:1704 2>/dev/null | nc 127.0.0.1 4711 >/dev/null 2>&1' >/dev/null 2>&1 &" 2>/dev/null || true
-        log_ok "Samsung Tab 3 (Sol Hoparlör) ses köprüsüne bağlandı."
-    fi
+        # Start continuous audio streaming loop via systemd-run
+        systemctl --user stop tablet-audio 2>/dev/null || true
+        systemctl --user reset-failed tablet-audio 2>/dev/null || true
+        systemd-run --user --unit=tablet-audio \
+            /bin/bash -c "while true; do parec -d @DEFAULT_SINK@.monitor --rate=44100 --channels=2 --format=s16le 2>/dev/null | socat - TCP:127.0.0.1:4711 2>/dev/null || true; sleep 0.5; done" >/dev/null 2>&1
+        log_ok "Doğrudan PipeWire PCM Ses Akışı aktif (44.1kHz 16-bit Stereo -> Tablet Hoparlörleri)."
 
-    # 5. Connect Vestel Tablet (Sağ Kanal / Right Channel)
-    log_info "Vestel V Tab 7 Lite II (Sağ Kanal) kontrol ediliyor..."
-    local VESTEL_DEV=$(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1)
-    if [ -n "$VESTEL_DEV" ]; then
-        # Launch Snapcast Android App on Vestel
-        adb -s "$VESTEL_DEV" shell "am start -n de.badaix.snapcast/.MainActivity" >/dev/null 2>&1 || true
-        log_ok "Vestel Tab 7 (Sağ Hoparlör) Snapcast istemcisi açıldı."
     else
-        log_info "Vestel tablet USB üzerinden algılanmadı, Wi-Fi üzerinden Snapcast uygulamasından bağlanabilirsiniz."
+        # 3. Start Snapserver in background
+        log_info "Snapserver ana akış sunucusu başlatılıyor..."
+        export LD_LIBRARY_PATH="$DIR/lib:$LD_LIBRARY_PATH"
+        setsid "$SNAP_BIN" -c "$CONF_FILE" > "$LOG_FILE" 2>&1 &
+        local SERVER_PID=$!
+        sleep 1
+
+        if ! pgrep -f "snapserver.*snapserver.conf" >/dev/null 2>&1; then
+            log_err "Snapserver başlatılamadı! Log inceleniyor:"
+            cat "$LOG_FILE" | tail -n 15
+            exit 1
+        fi
+        log_ok "Snapserver aktif (Port: 1704, Web UI: http://$PC_IP:1780)"
+
+        # 4. Connect Samsung Galaxy Tab 3 (Sol Kanal / Left Channel)
+        log_info "Samsung Galaxy Tab 3 (Sol Kanal) hazırlanıyor..."
+        pkill -f "ssh.*-R 1704:127.0.0.1:1704" 2>/dev/null || true
+
+        local CONNECTED_SSH=0
+
+        # Try USB forwarded SSH first
+        if [ -n "$USB_DEV" ]; then
+            adb -s "$USB_DEV" forward tcp:2222 tcp:22 2>/dev/null || true
+            if $SSH_CMD -p 2222 -q root@127.0.0.1 "exit" 2>/dev/null; then
+                log_info "USB üzerinden SSH reverse tüneli kuruluyor (-R 1704:127.0.0.1:1704)..."
+                $SSH_CMD -o ExitOnForwardFailure=no -f -N -p 2222 -R 1704:127.0.0.1:1704 root@127.0.0.1 2>/dev/null || true
+                $SSH_CMD -p 2222 root@127.0.0.1 "pkill -f snapclient 2>/dev/null || true" 2>/dev/null || true
+                $SSH_CMD -p 2222 root@127.0.0.1 "nohup sh -c 'snapclient --player file:filename=stdout tcp://127.0.0.1:1704 2>/dev/null | nc 127.0.0.1 4711 >/dev/null 2>&1' >/dev/null 2>&1 &" 2>/dev/null || true
+                CONNECTED_SSH=1
+                log_ok "Samsung Tab 3 USB üzerinden ses köprüsüne bağlandı (UFW engeli aşıldı)."
+            fi
+        fi
+
+        # If USB SSH not established, try Wi-Fi SSH (my-tablet-server)
+        if [ "$CONNECTED_SSH" -eq 0 ]; then
+            log_info "Wi-Fi üzerinden SSH reverse tüneli kuruluyor (-R 1704:127.0.0.1:1704)..."
+            ssh -o StrictHostKeyChecking=accept-new -o ExitOnForwardFailure=no -o ConnectTimeout=3 -f -N -R 1704:127.0.0.1:1704 my-tablet-server 2>/dev/null || true
+            ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3 my-tablet-server "pkill -f snapclient 2>/dev/null || true" 2>/dev/null || true
+            ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3 my-tablet-server "nohup sh -c 'snapclient --player file:filename=stdout tcp://127.0.0.1:1704 2>/dev/null | nc 127.0.0.1 4711 >/dev/null 2>&1' >/dev/null 2>&1 &" 2>/dev/null || true
+            log_ok "Samsung Tab 3 (Sol Hoparlör) ses köprüsüne bağlandı."
+        fi
+
+        # 5. Connect Vestel Tablet (Sağ Kanal / Right Channel)
+        log_info "Vestel V Tab 7 Lite II (Sağ Kanal) kontrol ediliyor..."
+        local VESTEL_DEV=$(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1)
+        if [ -n "$VESTEL_DEV" ]; then
+            adb -s "$VESTEL_DEV" shell "am start -n de.badaix.snapcast/.MainActivity" >/dev/null 2>&1 || true
+            log_ok "Vestel Tab 7 (Sağ Hoparlör) Snapcast istemcisi açıldı."
+        else
+            log_info "Vestel tablet USB üzerinden algılanmadı, Wi-Fi üzerinden Snapcast uygulamasından bağlanabilirsiniz."
+        fi
     fi
 
     echo ""
@@ -262,27 +283,44 @@ start_speakers() {
 }
 
 stop_speakers() {
-    log_info "Stereo hoparlör modu ve servisleri kapatılıyor..."
+    local SILENT="${1:-}"
+    if [ -z "$SILENT" ]; then
+        log_info "Stereo hoparlör modu ve servisleri kapatılıyor..."
+    fi
 
-    # 1. Kill PC Snapserver & pw-record
+    # 1. Kill Direct PCM Stream
+    systemctl --user stop tablet-audio 2>/dev/null || true
+    systemctl --user reset-failed tablet-audio 2>/dev/null || true
+    if [ -f "$PID_FILE" ]; then
+        kill $(cat "$PID_FILE" 2>/dev/null) 2>/dev/null || true
+        rm -f "$PID_FILE"
+    fi
+    pkill -f "parec.*DEFAULT_SINK" 2>/dev/null || true
+    pkill -f "pw-record.*44100" 2>/dev/null || true
+    pkill -f "socat.*4711" 2>/dev/null || true
+
+    # 2. Kill PC Snapserver & pw-record
     pkill -f "snapserver.*snapserver.conf" 2>/dev/null || true
     pkill -f "pw-record.*snapfifo" 2>/dev/null || true
 
-    # 2. Stop Samsung Snapclient & SSH reverse tunnel
+    # 3. Stop Samsung Snapclient & SSH reverse tunnel
     pkill -f "ssh.*-R 1704:127.0.0.1:1704" 2>/dev/null || true
-    ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 -p 2222 root@127.0.0.1 "pkill -f snapclient 2>/dev/null || true" 2>/dev/null || true
-    ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 my-tablet-server "pkill -f snapclient 2>/dev/null || true" 2>/dev/null || true
+    pkill -f "ssh.*-L 4711:127.0.0.1:4711" 2>/dev/null || true
+    ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -p 2222 root@127.0.0.1 "pkill -f snapclient 2>/dev/null || true" 2>/dev/null || true
+    ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 my-tablet-server "pkill -f snapclient 2>/dev/null || true" 2>/dev/null || true
 
-    # 3. Stop Vestel Snapcast app
+    # 4. Stop Vestel Snapcast app
     local VESTEL_DEV=$(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1)
     if [ -n "$VESTEL_DEV" ]; then
         adb -s "$VESTEL_DEV" shell "am force-stop de.badaix.snapcast" 2>/dev/null || true
     fi
 
-    # 4. Kill CAVA
+    # 5. Kill CAVA
     pkill -f "cava -p.*cava.conf" 2>/dev/null || true
 
-    log_ok "Tüm stereo hoparlör servisleri ve istemcileri durduruldu."
+    if [ -z "$SILENT" ]; then
+        log_ok "Tüm stereo hoparlör servisleri ve istemcileri durduruldu."
+    fi
 }
 
 cava_visualizer() {
@@ -299,18 +337,24 @@ status_speakers() {
     echo -e "${CYAN}${BOLD}=== STEREO HOPARLÖR & CAVA DURUM RAPORU ===${NC}"
     local PC_IP=$(get_pc_ip)
 
-    if pgrep -f "snapserver.*snapserver.conf" >/dev/null 2>&1; then
+    if systemctl --user is-active tablet-audio >/dev/null 2>&1 || pgrep -f "socat.*4711" >/dev/null 2>&1; then
+        echo -e "  Ses Akışı Durumu:    ${GREEN}ÇALIŞIYOR (Doğrudan PipeWire -> AudioBridge PCM) ✓${NC}"
+        echo -e "  Ses Akış Formatı:    44.1kHz / 16-bit / Stereo (Düşük Gecikme)"
+    elif pgrep -f "snapserver.*snapserver.conf" >/dev/null 2>&1; then
         local PID=$(pgrep -f "snapserver.*snapserver.conf" | head -n1)
         echo -e "  Snapserver Durumu:   ${GREEN}ÇALIŞIYOR (PID: $PID)${NC}"
         echo -e "  Web Kontrol Portu:   ${CYAN}http://$PC_IP:1780${NC}"
         echo -e "  Ses Akış Portu:      1704 (FLAC / 48kHz / 16-bit)"
     else
-        echo -e "  Snapserver Durumu:   ${RED}KAPALI${NC}"
+        echo -e "  Ses Akışı Durumu:    ${RED}KAPALI${NC}"
     fi
 
     # Samsung status
-    if ssh -o ConnectTimeout=2 my-tablet-server "pgrep -f snapclient >/dev/null 2>&1" 2>/dev/null; then
-        echo -e "  Samsung Tab 3 (Sol): ${GREEN}BAĞLI & ÇALIŞIYOR ✓${NC}"
+    local USB_DEV=$(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1)
+    if [ -n "$USB_DEV" ]; then
+        echo -e "  Samsung Tab 3 (Sol): ${GREEN}USB'den Bağlı (ADB: $USB_DEV) ✓${NC}"
+    elif ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 my-tablet-server "exit" 2>/dev/null; then
+        echo -e "  Samsung Tab 3 (Sol): ${GREEN}Wi-Fi ile Bağlı ✓${NC}"
     else
         echo -e "  Samsung Tab 3 (Sol): ${YELLOW}Bağlı Değil / Beklemede${NC}"
     fi

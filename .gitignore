@@ -20,6 +20,7 @@ id_ed25519*
 *_backup/
 packages/retro/*.apk
 !packages/retro/README.md
+lib/
 
 # Python cache
 __pycache__/
