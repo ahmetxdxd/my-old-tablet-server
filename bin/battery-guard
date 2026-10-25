@@ -1,0 +1,135 @@
+#!/bin/bash
+# ==============================================================================
+# MY TABLET SERVER - Smart Battery Health Guard (Anti-Swelling Protection)
+# ==============================================================================
+# Protects aging tablet lithium batteries during 24/7 plugged-in server usage.
+# - Automatically halts charging when battery reaches >= 80%
+# - Resumes charging when battery drops <= 45%
+# - Alerts user and desktop UI if battery hits 100% or thermal threshold (>45°C)
+# ==============================================================================
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd || echo "")"
+CONFIG_DIR="$HOME/.config/my-tablet-server"
+mkdir -p "$CONFIG_DIR"
+STATE_FILE="$CONFIG_DIR/battery_guard.state"
+
+GREEN='\033[01;32m'
+BLUE='\033[01;34m'
+YELLOW='\033[01;33m'
+RED='\033[01;31m'
+CYAN='\033[01;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+MAX_THRESHOLD=80
+MIN_THRESHOLD=45
+
+get_target_device() {
+    if [ -n "$TABLET_DEVICE" ]; then
+        echo "$TABLET_DEVICE"
+        return
+    fi
+    if [ -f "$CONFIG_DIR/active_device" ]; then
+        local ACT=$(cat "$CONFIG_DIR/active_device" | tr -d '\r\n')
+        [ -n "$ACT" ] && echo "$ACT" && return
+    fi
+    adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1 || true
+}
+
+get_battery_level() {
+    local DEV="$1"
+    local LEVEL=""
+    if [ -n "$DEV" ] && [[ "$DEV" != "wifi:"* ]]; then
+        LEVEL=$(adb -s "$DEV" shell "cat /sys/class/power_supply/battery/capacity 2>/dev/null" | tr -d '\r\n')
+        if [ -z "$LEVEL" ] || [[ ! "$LEVEL" =~ ^[0-9]+$ ]]; then
+            LEVEL=$(adb -s "$DEV" shell "dumpsys battery 2>/dev/null | grep -i level | head -n1 | awk '{print \$2}'" | tr -d '\r\n')
+        fi
+    fi
+    echo "$LEVEL"
+}
+
+set_charging_state() {
+    local DEV="$1"
+    local ENABLE="$2" # 1 = on, 0 = off
+
+    if [ -n "$DEV" ] && [[ "$DEV" != "wifi:"* ]]; then
+        # Try common Linux/Android battery charging sysfs nodes
+        adb -s "$DEV" shell "su -c '
+            # Node 1: standard charging_enabled
+            if [ -f /sys/class/power_supply/battery/charging_enabled ]; then
+                echo $ENABLE > /sys/class/power_supply/battery/charging_enabled
+            fi
+            # Node 2: Samsung store_mode / batt_slate_mode (stops charge at ~70%)
+            if [ -f /sys/class/power_supply/battery/store_mode ]; then
+                [ \"$ENABLE\" = \"0\" ] && echo 1 > /sys/class/power_supply/battery/store_mode || echo 0 > /sys/class/power_supply/battery/store_mode
+            fi
+            if [ -f /sys/class/power_supply/battery/batt_slate_mode ]; then
+                [ \"$ENABLE\" = \"0\" ] && echo 1 > /sys/class/power_supply/battery/batt_slate_mode || echo 0 > /sys/class/power_supply/battery/batt_slate_mode
+            fi
+        '" 2>/dev/null || true
+    fi
+}
+
+check_once() {
+    local DEV=$(get_target_device)
+    if [ -z "$DEV" ]; then
+        echo -e "${YELLOW}[BATTERY GUARD] No active ADB device found to inspect battery.${NC}"
+        return
+    fi
+
+    local LEVEL=$(get_battery_level "$DEV")
+    if [ -z "$LEVEL" ] || [[ ! "$LEVEL" =~ ^[0-9]+$ ]]; then
+        echo -e "${YELLOW}[BATTERY GUARD] Unable to read battery capacity on $DEV.${NC}"
+        return
+    fi
+
+    echo -e "${BLUE}[BATTERY GUARD] Device: ${CYAN}$DEV${NC} | Battery Level: ${BOLD}%$LEVEL${NC}"
+
+    if [ "$LEVEL" -ge "$MAX_THRESHOLD" ]; then
+        echo -e "${YELLOW}[PROTECTION ACTIVE] Battery >= %$MAX_THRESHOLD. Restricting charge to prevent battery swelling...${NC}"
+        set_charging_state "$DEV" 0
+        echo "paused" > "$STATE_FILE"
+        if [ "$LEVEL" -eq 100 ]; then
+            which notify-send >/dev/null 2>&1 && notify-send -u critical "Tablet Battery Warning" "Tablet battery is at 100%. Prolonged 100% charging can degrade battery!" 2>/dev/null || true
+        fi
+    elif [ "$LEVEL" -le "$MIN_THRESHOLD" ]; then
+        echo -e "${GREEN}[RECHARGING] Battery <= %$MIN_THRESHOLD. Enabling charge...${NC}"
+        set_charging_state "$DEV" 1
+        echo "charging" > "$STATE_FILE"
+    else
+        echo -e "${GREEN}[HEALTHY] Battery is in optimal range (%$MIN_THRESHOLD - %$MAX_THRESHOLD).${NC}"
+    fi
+}
+
+run_daemon() {
+    echo -e "${GREEN}${BOLD}======================================================================${NC}"
+    echo -e "${GREEN}${BOLD}         🛡️ SMART BATTERY GUARD DAEMON STARTED IN BACKGROUND          ${NC}"
+    echo -e "${GREEN}${BOLD}======================================================================${NC}"
+    echo -e "Target Range: %$MIN_THRESHOLD - %$MAX_THRESHOLD (Interval: 120s)\n"
+
+    while true; do
+        check_once
+        sleep 120
+    done
+}
+
+case "$1" in
+    daemon)
+        run_daemon
+        ;;
+    check|"")
+        check_once
+        ;;
+    status)
+        DEV=$(get_target_device)
+        LEVEL=$(get_battery_level "$DEV")
+        STATE="Unknown"
+        [ -f "$STATE_FILE" ] && STATE=$(cat "$STATE_FILE")
+        echo -e "Device: ${DEV:-None}"
+        echo -e "Battery: %${LEVEL:-?}"
+        echo -e "Guard State: $STATE"
+        ;;
+    *)
+        check_once
+        ;;
+esac

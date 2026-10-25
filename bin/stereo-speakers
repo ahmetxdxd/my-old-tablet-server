@@ -178,7 +178,13 @@ start_speakers() {
         echo -e "   ${YELLOW}sudo ufw allow 1704/tcp && sudo ufw allow 1780/tcp${NC}"
     fi
 
-    local USB_DEV=$(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1)
+    local USB_DEV="${SPECIFIED_DEVICE:-$TABLET_DEVICE}"
+    if [ -z "$USB_DEV" ] && [ -f "$HOME/.config/my-tablet-server/active_device" ]; then
+        USB_DEV=$(cat "$HOME/.config/my-tablet-server/active_device" 2>/dev/null | tr -d '\r\n')
+    fi
+    if [ -z "$USB_DEV" ] || [[ "$USB_DEV" == "wifi:"* ]]; then
+        USB_DEV=$(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1)
+    fi
     local SSH_CMD="ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3"
 
     # Ensure AudioBridge is running on tablet and hardware volume is active
@@ -350,7 +356,13 @@ status_speakers() {
     fi
 
     # Samsung status
-    local USB_DEV=$(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1)
+    local USB_DEV="${SPECIFIED_DEVICE:-$TABLET_DEVICE}"
+    if [ -z "$USB_DEV" ] && [ -f "$HOME/.config/my-tablet-server/active_device" ]; then
+        USB_DEV=$(cat "$HOME/.config/my-tablet-server/active_device" 2>/dev/null | tr -d '\r\n')
+    fi
+    if [ -z "$USB_DEV" ] || [[ "$USB_DEV" == "wifi:"* ]]; then
+        USB_DEV=$(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1)
+    fi
     if [ -n "$USB_DEV" ]; then
         echo -e "  Samsung Tab 3 (Sol): ${GREEN}USB'den Bağlı (ADB: $USB_DEV) ✓${NC}"
     elif ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 my-tablet-server "exit" 2>/dev/null; then

@@ -50,6 +50,9 @@ run_in_terminal() {
 notify
 
 case "$ACTION" in
+    tablet-dashboard|ui|dashboard)
+        nohup "$DIR/bin/tablet-dashboard" >/dev/null 2>&1 &
+        ;;
     second-screen-usb)
         nohup "$DIR/bin/second-screen" usb >/dev/null 2>&1 &
         ;;

@@ -3,19 +3,22 @@
 # My Tablet Server - Host PC Master CLI & Shortcut Runner
 # ==============================================================================
 # Allows running any tablet command from the PC terminal without entering
-# the tablet terminal directly.
+# the tablet terminal directly. Supports multi-tablet management!
 #
 # Examples:
 #   tablet                    -> Opens interactive Quick Menu
+#   tablet ui / dashboard     -> Opens Modern Desktop Graphical UI
+#   tablet devices            -> Lists all connected tablets & battery/temps
+#   tablet doctor             -> Diagnoses connection, root, and ADB health
+#   tablet battery-guard      -> Manages smart charging & battery health
+#   tablet -s <id> <command>  -> Targets a specific tablet by Serial/IP
 #   tablet terminal           -> Connects instantly to tablet terminal
 #   tablet status             -> Shows tablet metrics, battery, temperature
-#   tablet screensaver art    -> Starts Frutiger Aero screensaver
-#   tablet second-screen usb  -> Starts PC second monitor
-#   tablet debloat            -> Runs safe debloater on tablet
-#   tablet <any_command>      -> Executes command directly inside tablet
 # ==============================================================================
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_DIR="$HOME/.config/my-tablet-server"
+mkdir -p "$CONFIG_DIR"
 
 # Colors
 GREEN='\033[01;32m'
@@ -25,37 +28,67 @@ RED='\033[01;31m'
 BOLD='\033[1m'
 NC='\033[0m'
 
+# Parse global device selector (-s or --device)
+TARGET_DEVICE=""
+if [ "$1" = "-s" ] || [ "$1" = "--device" ]; then
+    TARGET_DEVICE="$2"
+    shift 2
+fi
+
+# Determine device if not passed
+if [ -z "$TARGET_DEVICE" ]; then
+    if [ -n "$TABLET_DEVICE" ]; then
+        TARGET_DEVICE="$TABLET_DEVICE"
+    elif [ -f "$CONFIG_DIR/active_device" ]; then
+        TARGET_DEVICE=$(cat "$CONFIG_DIR/active_device" 2>/dev/null | tr -d '\r\n')
+    fi
+fi
+
 # Helper: execute command inside tablet chroot
 run_on_tablet() {
     local CMD="$*"
 
-    # 1. Check USB connection
-    local ADB_DEVICE=$(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1 || true)
-    if [ -n "$ADB_DEVICE" ]; then
-        adb forward tcp:2222 tcp:22 2>/dev/null || true
+    # 1. Check if target is a Wi-Fi IP directly
+    if [[ "$TARGET_DEVICE" == "wifi:"* ]]; then
+        local WIP="${TARGET_DEVICE#wifi:}"
+        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -t "root@${WIP}" "export PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:\$PATH; $CMD"
+        return $?
+    fi
 
-        # Try SSH first if available
-        if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -p 2222 -q root@127.0.0.1 "exit" 2>/dev/null; then
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 -t root@127.0.0.1 "export PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:\$PATH; $CMD"
-            return $?
-        else
-            # Smart ADB chroot execution fallback
-            adb -s "$ADB_DEVICE" shell "su -c '
-                L=/data/local/linux/lib/ld-musl-armhf.so.1
-                B=/data/local/linux/bin/busybox
-                R=/data/local/linux
-                if [ -f \$R/bin/bash ]; then
-                    SH=/bin/bash
-                else
-                    SH=/bin/sh
-                fi
-                \$L \$B chroot \$R \$SH -c \"export PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:\\\$PATH; $CMD\"
-            '"
-            return $?
+    # 2. Check USB ADB connection
+    local ADB_DEVICE="$TARGET_DEVICE"
+    if [ -z "$ADB_DEVICE" ] || [[ "$ADB_DEVICE" == "wifi:"* ]]; then
+        ADB_DEVICE=$(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1 || true)
+    fi
+
+    if [ -n "$ADB_DEVICE" ]; then
+        # Ensure target is valid ADB device
+        if adb devices 2>/dev/null | grep -E "^${ADB_DEVICE}\s+device" >/dev/null 2>&1; then
+            adb -s "$ADB_DEVICE" forward tcp:2222 tcp:22 2>/dev/null || true
+
+            # Try SSH first if available
+            if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -p 2222 -q root@127.0.0.1 "exit" 2>/dev/null; then
+                ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 -t root@127.0.0.1 "export PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:\$PATH; $CMD"
+                return $?
+            else
+                # Smart ADB chroot execution fallback
+                adb -s "$ADB_DEVICE" shell "su -c '
+                    L=/data/local/linux/lib/ld-musl-armhf.so.1
+                    B=/data/local/linux/bin/busybox
+                    R=/data/local/linux
+                    if [ -f \$R/bin/bash ]; then
+                        SH=/bin/bash
+                    else
+                        SH=/bin/sh
+                    fi
+                    \$L \$B chroot \$R \$SH -c \"export PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:\\\$PATH; $CMD\"
+                '"
+                return $?
+            fi
         fi
     fi
 
-    # 2. Check Wi-Fi connection
+    # 3. Check Wi-Fi connection
     local TARGET_IP=""
     if [ -f "$HOME/.ssh/config" ]; then
         TARGET_IP=$(awk '/Host my-tablet-server/{flag=1; next} /Host /{flag=0} flag && /HostName/{print $2; exit}' "$HOME/.ssh/config" 2>/dev/null || true)
@@ -83,11 +116,69 @@ fi
 ACTION="$1"
 
 case "$ACTION" in
+    update|upgrade)
+        shift
+        if [ -f "$DIR/../update.sh" ]; then
+            exec "$DIR/../update.sh" "$@"
+        else
+            echo -e "${RED}[ERROR] update.sh not found!${NC}"
+            exit 1
+        fi
+        ;;
+    uninstall|remove|revert)
+        shift
+        if [ -f "$DIR/../uninstall.sh" ]; then
+            exec "$DIR/../uninstall.sh" "$@"
+        else
+            echo -e "${RED}[ERROR] uninstall.sh not found!${NC}"
+            exit 1
+        fi
+        ;;
+    shortcut|install-shortcut|desktop)
+        shift
+        exec "$DIR/install-desktop-shortcut" "$@"
+        ;;
+    ui|gui|dashboard|web|panel)
+        shift
+        if [ -f "$DIR/tablet-dashboard" ]; then
+            exec "$DIR/tablet-dashboard" "$@"
+        else
+            echo -e "${RED}[ERROR] tablet-dashboard not found!${NC}"
+            exit 1
+        fi
+        ;;
+    devices|devs|list)
+        shift
+        if [ -f "$DIR/tablet-devices" ]; then
+            exec "$DIR/tablet-devices" "$@"
+        else
+            echo -e "${RED}[ERROR] tablet-devices script not found!${NC}"
+            exit 1
+        fi
+        ;;
+    doctor|check|diag|diagnose)
+        shift
+        if [ -f "$DIR/tablet-doctor" ]; then
+            exec "$DIR/tablet-doctor" "$@"
+        else
+            echo -e "${RED}[ERROR] tablet-doctor script not found!${NC}"
+            exit 1
+        fi
+        ;;
+    battery-guard|battery|charge)
+        shift
+        if [ -f "$DIR/battery-guard" ]; then
+            exec "$DIR/battery-guard" "$@"
+        else
+            echo -e "${RED}[ERROR] battery-guard script not found!${NC}"
+            exit 1
+        fi
+        ;;
     terminal|term|ssh|console|shell|connect)
         shift
         exec "$DIR/tablet-terminal" "$@"
         ;;
-    menu|panel|quick)
+    menu|quick)
         shift
         exec "$DIR/tablet-menu" "$@"
         ;;
@@ -104,20 +195,24 @@ case "$ACTION" in
         echo -e "${BLUE}${BOLD}======================================================${NC}"
         echo -e "Usage:"
         echo -e "  ${GREEN}tablet${NC}                      : Open interactive Quick Control Menu"
+        echo -e "  ${GREEN}tablet ui${NC}                   : Launch Modern Graphical Desktop Dashboard"
+        echo -e "  ${GREEN}tablet devices${NC}              : Scan and inspect all connected tablets"
+        echo -e "  ${GREEN}tablet doctor${NC}               : Diagnose connectivity, root, and health"
+        echo -e "  ${GREEN}tablet battery-guard${NC}        : Manage smart battery health and charging"
+        echo -e "  ${GREEN}tablet update${NC}               : Upgrade to latest release without data loss"
+        echo -e "  ${GREEN}tablet uninstall${NC}            : Completely revert changes and restore tablet"
+        echo -e "  ${GREEN}tablet shortcut${NC}             : Install one-click desktop app shortcut"
         echo -e "  ${GREEN}tablet terminal${NC}             : Connect directly to live tablet terminal"
         echo -e "  ${GREEN}tablet status${NC}               : View tablet CPU temp, RAM, battery & IP"
-        echo -e "  ${GREEN}tablet <command>${NC}            : Execute README command directly on tablet"
+        echo -e "  ${GREEN}tablet -s <id> <cmd>${NC}        : Run command on specific tablet ID"
         echo -e ""
-        echo -e "Example Commands (Execute without entering tablet):"
+        echo -e "Example Features:"
         echo -e "  tablet screensaver art      : Start Frutiger Aero screensaver"
         echo -e "  tablet screensaver aquarium : Start Coral Reef Aquarium screensaver"
         echo -e "  tablet second-screen usb    : Turn tablet into PC second display via USB"
         echo -e "  tablet stereo-speakers start: Stream PC audio to tablet speakers"
-        echo -e "  tablet anime app            : Open AnimeDLR streaming app"
-        echo -e "  tablet debloat              : Clean up 60+ background services"
+        echo -e "  tablet debloat              : Freeze 60+ bloatware services safely"
         echo -e "  tablet screen off           : Turn off screen backlight (power saving)"
-        echo -e "  tablet screen on            : Turn on screen backlight"
-        echo -e "  tablet radio lofi           : Stream live lofi hip hop radio"
         echo -e "${BLUE}======================================================${NC}"
         ;;
     *)

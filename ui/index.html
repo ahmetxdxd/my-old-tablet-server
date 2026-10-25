@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Old Tablet Server - Kontrol Merkezi</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: rgba(22, 30, 49, 0.7);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --primary: #0ea5e9;
+      --primary-hover: #38bdf8;
+      --accent-green: #10b981;
+      --accent-yellow: #f59e0b;
+      --accent-purple: #8b5cf6;
+      --accent-red: #ef4444;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(14, 165, 233, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.15) 0px, transparent 50%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* HEADER */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-icon {
+      font-size: 32px;
+      background: linear-gradient(135deg, var(--primary), var(--accent-purple));
+      border-radius: 14px;
+      padding: 8px 12px;
+      box-shadow: 0 4px 16px rgba(14, 165, 233, 0.3);
+    }
+
+    .brand-text h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .brand-text p {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .btn {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      backdrop-filter: blur(10px);
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #0284c7, #0ea5e9);
+      border-color: rgba(56, 189, 248, 0.4);
+      color: white;
+      box-shadow: 0 4px 12px rgba(14, 165, 233, 0.25);
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #0369a1, #0284c7);
+      box-shadow: 0 6px 16px rgba(14, 165, 233, 0.35);
+    }
+
+    .btn-green {
+      background: linear-gradient(135deg, #059669, #10b981);
+      border-color: rgba(16, 185, 129, 0.4);
+      color: white;
+    }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+    }
+
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.25);
+    }
+
+    /* MULTI-TABLET BANNER & SELECTOR */
+    .section-title {
+      font-size: 15px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .device-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .device-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 18px;
+      position: relative;
+      cursor: pointer;
+      backdrop-filter: blur(12px);
+      transition: all 0.25s ease;
+    }
+
+    .device-card:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-2px);
+    }
+
+    .device-card.active {
+      border-color: var(--accent-green);
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+      background: rgba(16, 185, 129, 0.05);
+    }
+
+    .active-badge {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      background: var(--accent-green);
+      color: #064e3b;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 20px;
+      display: none;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .device-card.active .active-badge {
+      display: inline-flex;
+    }
+
+    .dev-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .dev-icon {
+      font-size: 26px;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 8px;
+      border-radius: 10px;
+    }
+
+    .dev-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .dev-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .dev-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .stat-box {
+      background: rgba(0, 0, 0, 0.25);
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.03);
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+
+    .stat-value {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .battery-bar-wrap {
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+
+    .battery-bar-fill {
+      height: 100%;
+      background: var(--accent-green);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    /* STEREO ASSIGNMENT ROW */
+    .stereo-bar {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 14px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+
+    .stereo-channels {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .channel-select {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+    }
+
+    select {
+      background: #111827;
+      color: var(--text);
+      border: 1px solid var(--card-border);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      outline: none;
+    }
+
+    /* MAIN ACTIONS GRID */
+    .main-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+
+    .panel-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 20px;
+      backdrop-filter: blur(12px);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      line-height: 1.4;
+    }
+
+    .actions-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: auto;
+    }
+
+    .volume-slider-wrap {
+      margin-top: 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+    }
+
+    input[type=range] {
+      flex: 1;
+      accent-color: var(--primary);
+    }
+
+    /* CONSOLE LOG */
+    .console-panel {
+      background: #06090e;
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+
+    .console-header {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+    }
+
+    .console-body {
+      padding: 14px 16px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: #38bdf8;
+      max-height: 180px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+
+    /* MODAL */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .modal-box {
+      background: #111827;
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      width: 100%;
+      max-width: 600px;
+      padding: 24px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .modal-header h3 {
+      font-size: 18px;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    .diag-item {
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      margin-bottom: 8px;
+      border-left: 4px solid var(--primary);
+    }
+
+    .diag-item.ok { border-left-color: var(--accent-green); }
+    .diag-item.warn { border-left-color: var(--accent-yellow); }
+    .diag-item.fail { border-left-color: var(--accent-red); }
+
+    .diag-title {
+      font-weight: 600;
+      font-size: 14px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .diag-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .diag-fix {
+      font-size: 12px;
+      color: var(--primary);
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- HEADER -->
+    <header>
+      <div class="brand">
+        <div class="brand-icon">📱</div>
+        <div class="brand-text">
+          <h1>My Old Tablet Server</h1>
+          <p>Çoklu Tablet & Donanım Kontrol Merkezi</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn" onclick="fetchDevices()">🔄 Cihazları Tara</button>
+        <button class="btn" onclick="openDoctorModal()">🩺 Tablet Doktoru</button>
+        <button class="btn" id="guardBtn" onclick="runAction('battery_guard_check')">🛡️ Pil Koruması: Aktif</button>
+      </div>
+    </header>
+
+    <!-- MULTI-TABLET SELECTOR -->
+    <div class="section-title">
+      <span>📱 Bağlı Tabletler (<span id="deviceCount">0</span>)</span>
+      <span style="font-size: 12px; color: var(--text-muted); text-transform: none;">— İşlem yapmak istediğiniz tableti seçiniz</span>
+    </div>
+    
+    <div class="device-grid" id="deviceList">
+      <div style="grid-column: 1/-1; padding: 24px; text-align: center; color: var(--text-muted);">
+        Tabletler taranıyor...
+      </div>
+    </div>
+
+    <!-- DUAL STEREO ASSIGNMENT BAR -->
+    <div class="stereo-bar">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 20px;">📻</span>
+        <div>
+          <strong style="font-size: 14px;">Çift Tablet Stereo Hoparlör Ataması</strong>
+          <p style="font-size: 12px; color: var(--text-muted);">Masada sol ve sağ tarafa koyduğunuz tabletleri bağımsız atayın</p>
+        </div>
+      </div>
+      <div class="stereo-channels">
+        <div class="channel-select">
+          <span>Sol Kanal (L):</span>
+          <select id="leftDeviceSelect"><option value="">Otomatik</option></select>
+        </div>
+        <div class="channel-select">
+          <span>Sağ Kanal (R):</span>
+          <select id="rightDeviceSelect"><option value="">Otomatik</option></select>
+        </div>
+        <button class="btn btn-primary" onclick="runAction('stereo_start')">▶ Stereo Başlat</button>
+        <button class="btn btn-danger" onclick="runAction('stereo_stop')">⏹ Durdur</button>
+      </div>
+    </div>
+
+    <!-- MAIN FEATURES GRID -->
+    <div class="main-grid">
+      
+      <!-- 1. SECOND MONITOR -->
+      <div class="panel-card">
+        <div class="card-title">🖥️ PC İkinci Monitör (Second Screen)</div>
+        <div class="card-desc">
+          Tableti bilgisayarınızın 2. monitörü yapın. USB ile 0ms ultra düşük gecikme veya Wi-Fi ile kablosuz masaüstü.
+        </div>
+        <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center;">
+          <span style="font-size: 12px; color: var(--text-muted);">Konum:</span>
+          <select id="screenPosition">
+            <option value="right">Sağ (Önerilen)</option>
+            <option value="left">Sol</option>
+            <option value="above">Üst</option>
+            <option value="below">Alt</option>
+          </select>
+        </div>
+        <div class="actions-wrap">
+          <button class="btn btn-primary" onclick="startSecondScreen('usb')">⚡ USB ile Aç</button>
+          <button class="btn" onclick="startSecondScreen('wifi')">📶 Wi-Fi ile Aç</button>
+          <button class="btn btn-danger" onclick="runAction('second_screen_stop')">⏹ Kapat</button>
+        </div>
+      </div>
+
+      <!-- 2. STEREO AUDIO & CAVA -->
+      <div class="panel-card">
+        <div class="card-title">📻 Hoparlör & CAVA Spektrum</div>
+        <div class="card-desc">
+          PC sesini tablet hoparlörlerine donanım senkronlu aktarın ve canlı ses frekans dalgalarını izleyin.
+        </div>
+        <div class="actions-wrap">
+          <button class="btn" onclick="runAction('stereo_cava')">📊 CAVA Görselleştirici</button>
+          <button class="btn btn-danger" onclick="runAction('stereo_stop')">⏹ Sesi Kapat</button>
+        </div>
+        <div class="volume-slider-wrap">
+          <span style="font-size: 13px;">🔊</span>
+          <input type="range" id="volumeSlider" min="0" max="100" value="80" onchange="setVolume(this.value)">
+          <span id="volLabel" style="font-size: 12px; font-family: var(--font-mono); width: 32px;">80%</span>
+        </div>
+      </div>
+
+      <!-- 3. SCREENSAVERS & AMBIENT -->
+      <div class="panel-card">
+        <div class="card-title">🌸 Ortam & Ekran Koruyucular</div>
+        <div class="card-desc">
+          Masanızı güzelleştiren canlı Frutiger Aero sanatı, tropikal akvaryum, şömine veya nostaljik matrix akışı.
+        </div>
+        <div class="actions-wrap">
+          <button class="btn" onclick="runAction('screensaver', {kind: 'art'})">🫧 Frutiger Aero</button>
+          <button class="btn" onclick="runAction('screensaver', {kind: 'aquarium'})">🐠 Akvaryum</button>
+          <button class="btn" onclick="runAction('screensaver', {kind: 'fireplace'})">🔥 Şömine</button>
+          <button class="btn" onclick="runAction('screensaver', {kind: 'matrix'})">🟩 Matrix</button>
+          <button class="btn" onclick="runAction('screensaver', {kind: 'dvd'})">💿 DVD Logo</button>
+          <button class="btn btn-danger" onclick="runAction('screensaver_stop')">⏹ Kapat</button>
+        </div>
+      </div>
+
+      <!-- 4. OPERATING MODES & POWER -->
+      <div class="panel-card">
+        <div class="card-title">⚡ Çalışma Modları & Güç</div>
+        <div class="card-desc">
+          Kullanım amacına göre tabletin donanımını optimize edin (ekran kapatıp RAM boşaltma veya Android UI).
+        </div>
+        <div class="actions-wrap">
+          <button class="btn" onclick="runAction('mode_linux')">🐧 Linux Sunucu</button>
+          <button class="btn" onclick="runAction('mode_android')">🤖 Android Tablet</button>
+          <button class="btn" onclick="runAction('mode_hybrid')">🌓 Hibrit Mod</button>
+          <button class="btn" onclick="runAction('screen_off')">🌙 Ekran Işığını Kapat</button>
+          <button class="btn" onclick="runAction('screen_on')">☀️ Ekran Işığını Aç</button>
+        </div>
+      </div>
+
+      <!-- 5. MAINTENANCE & SYSTEM TOOLS -->
+      <div class="panel-card">
+        <div class="card-title">🧹 Bakım & Sağlık Araçları</div>
+        <div class="card-desc">
+          Gereksiz 60+ Samsung/Google servisini dondurarak RAM'i rahatlatın veya teşhis çalıştırın.
+        </div>
+        <div class="actions-wrap">
+          <button class="btn btn-green" onclick="runAction('debloat')">🛡️ Güvenli Debloat</button>
+          <button class="btn" onclick="openDoctorModal()">🩺 Doktoru Başlat</button>
+          <button class="btn btn-danger" onclick="confirmReboot()">🔄 Tableti Yeniden Başlat</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- CONSOLE LOG -->
+    <div class="console-panel">
+      <div class="console-header">
+        <span>KONSOL GERİ BİLDİRİMİ (CANLI EYLEM GÜNLÜĞÜ)</span>
+        <button style="background: none; border: none; color: var(--text-muted); cursor: pointer;" onclick="clearConsole()">Temizle</button>
+      </div>
+      <div class="console-body" id="consoleOutput">Sistem hazır. Lütfen bir eylem seçin...</div>
+    </div>
+
+  </div>
+
+  <!-- DOCTOR MODAL -->
+  <div class="modal-overlay" id="doctorModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>🩺 Tablet Doktoru & Sağlık Teşhisi</h3>
+        <button class="close-btn" onclick="closeDoctorModal()">&times;</button>
+      </div>
+      <div id="doctorContent" style="margin-bottom: 20px;">
+        <p style="color: var(--text-muted);">Teşhis çalıştırılıyor...</p>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button class="btn btn-primary" onclick="runDoctorFix()">🔧 Otomatik Onar (Auto-Fix)</button>
+        <button class="btn" onclick="closeDoctorModal()">Kapat</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let activeDeviceId = "";
+    let devicesCache = [];
+
+    async function fetchDevices() {
+      try {
+        logConsole("--> Bağlı cihazlar taranıyor...");
+        const res = await fetch("/api/devices");
+        const data = await res.json();
+        devicesCache = data.devices || [];
+        renderDevices(devicesCache);
+      } catch (e) {
+        logConsole("[HATA] Cihazlar taranamadı: " + e.message);
+      }
+    }
+
+    function renderDevices(devices) {
+      const container = document.getElementById("deviceList");
+      const countLabel = document.getElementById("deviceCount");
+      const leftSelect = document.getElementById("leftDeviceSelect");
+      const rightSelect = document.getElementById("rightDeviceSelect");
+
+      countLabel.textContent = devices.length;
+      leftSelect.innerHTML = '<option value="">Otomatik</option>';
+      rightSelect.innerHTML = '<option value="">Otomatik</option>';
+
+      if (devices.length === 0) {
+        container.innerHTML = `
+          <div style="grid-column: 1/-1; padding: 28px; background: rgba(255,255,255,0.02); border-radius: 14px; text-align: center; border: 1px dashed var(--card-border);">
+            <p style="font-size: 15px; font-weight: 600; color: var(--accent-yellow);">Şu anda bağlı tablet bulunamadı!</p>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 6px;">
+              Tableti USB kablosuyla bilgisayara bağlayın (USB Hata Ayıklama açık olmalı) ya da Wi-Fi üzerinden ağa dahil edin.
+            </p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = "";
+      devices.forEach((dev, idx) => {
+        const isCurrentActive = dev.active || (activeDeviceId === dev.id) || (idx === 0 && !activeDeviceId);
+        if (isCurrentActive && !activeDeviceId) {
+          activeDeviceId = dev.id;
+        }
+
+        // Stereo dropdowns
+        const opt1 = document.createElement("option");
+        opt1.value = dev.id;
+        opt1.textContent = `${dev.model} (${dev.id})`;
+        leftSelect.appendChild(opt1);
+
+        const opt2 = document.createElement("option");
+        opt2.value = dev.id;
+        opt2.textContent = `${dev.model} (${dev.id})`;
+        rightSelect.appendChild(opt2);
+
+        // Battery bar color
+        let batVal = parseInt(dev.battery) || 0;
+        let batColor = "var(--accent-green)";
+        if (batVal < 30) batColor = "var(--accent-red)";
+        else if (batVal >= 80) batColor = "var(--accent-yellow)";
+
+        const card = document.createElement("div");
+        card.className = `device-card ${isCurrentActive ? 'active' : ''}`;
+        card.onclick = () => selectActiveDevice(dev.id);
+
+        card.innerHTML = `
+          <div class="active-badge">AKTİF TABLET</div>
+          <div class="dev-header">
+            <div class="dev-icon">${dev.type === 'usb' ? '🔌' : '📶'}</div>
+            <div>
+              <div class="dev-title">${dev.model}</div>
+              <div class="dev-sub">${dev.id} (${dev.type.toUpperCase()})</div>
+            </div>
+          </div>
+          <div class="dev-stats">
+            <div class="stat-box">
+              <div class="stat-label">Pil Seviyesi</div>
+              <div class="stat-value" style="color: ${batColor}">%${dev.battery}</div>
+              <div class="battery-bar-wrap">
+                <div class="battery-bar-fill" style="width: ${batVal}%; background: ${batColor};"></div>
+              </div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Sıcaklık</div>
+              <div class="stat-value">${dev.temp}</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Root Erişimi</div>
+              <div class="stat-value" style="color: ${dev.root === 'yes' ? 'var(--accent-green)' : 'var(--text-muted)'}">
+                ${dev.root === 'yes' ? 'Rootlu ✓' : 'Rootsuz'}
+              </div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">IP Adresi</div>
+              <div class="stat-value" style="font-size: 12px; font-family: var(--font-mono);">${dev.ip}</div>
+            </div>
+          </div>
+          <button class="btn ${isCurrentActive ? 'btn-green' : ''}" style="width: 100%; justify-content: center; font-size: 12px;">
+            ${isCurrentActive ? '✓ Aktif Tablet Olarak Seçildi' : '🎯 Bu Tableti Seç & Yönet'}
+          </button>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    async function selectActiveDevice(devId) {
+      activeDeviceId = devId;
+      try {
+        await fetch("/api/set_active", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({device_id: devId})
+        });
+        logConsole(`[BİLGİ] Hedef tablet belirlendi: ${devId}`);
+        fetchDevices();
+      } catch (e) {
+        logConsole("[HATA] Aktif cihaz kaydedilemedi: " + e.message);
+      }
+    }
+
+    async function runAction(actionName, extraParams = {}) {
+      logConsole(`--> İşlem başlatılıyor: ${actionName}...`);
+      try {
+        const payload = {
+          action: actionName,
+          device_id: activeDeviceId,
+          ...extraParams
+        };
+        const res = await fetch("/api/action", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.output) {
+          logConsole(data.output);
+        } else if (data.message) {
+          logConsole(data.message);
+        }
+      } catch (e) {
+        logConsole("[HATA] Komut yürütülemedi: " + e.message);
+      }
+    }
+
+    function startSecondScreen(mode) {
+      const pos = document.getElementById("screenPosition").value;
+      if (mode === "usb") {
+        runAction("second_screen_usb", {position: pos});
+      } else {
+        runAction("second_screen_wifi", {position: pos});
+      }
+    }
+
+    function setVolume(val) {
+      document.getElementById("volLabel").textContent = val + "%";
+      runAction("volume", {level: val});
+    }
+
+    function confirmReboot() {
+      if (confirm("Seçili tableti yeniden başlatmak istediğinizden emin misiniz?")) {
+        runAction("reboot");
+      }
+    }
+
+    function logConsole(text) {
+      const box = document.getElementById("consoleOutput");
+      box.textContent = text;
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function clearConsole() {
+      document.getElementById("consoleOutput").textContent = "Konsol temizlendi.";
+    }
+
+    // DOCTOR MODAL
+    async function openDoctorModal() {
+      document.getElementById("doctorModal").style.display = "flex";
+      const content = document.getElementById("doctorContent");
+      content.innerHTML = "<p style='color: var(--text-muted);'>Sistem taranıyor...</p>";
+
+      try {
+        const res = await fetch("/api/doctor");
+        const doc = await res.json();
+        
+        let html = `
+          <div style="margin-bottom: 14px; font-size: 13px;">
+            Özet: <strong style="color: var(--accent-green);">${doc.passed} Başarılı</strong> | 
+            <strong style="color: var(--accent-yellow);">${doc.warned} Uyarı</strong> | 
+            <strong style="color: var(--accent-red);">${doc.failed} Hata</strong>
+          </div>
+        `;
+
+        (doc.checks || []).forEach(chk => {
+          html += `
+            <div class="diag-item ${chk.status}">
+              <div class="diag-title">
+                <span>${chk.title}</span>
+                <span style="font-size: 11px; text-transform: uppercase;">${chk.status}</span>
+              </div>
+              <div class="diag-desc">${chk.detail}</div>
+              ${chk.fix ? `<div class="diag-fix">💡 Çözüm: ${chk.fix}</div>` : ''}
+            </div>
+          `;
+        });
+        content.innerHTML = html;
+      } catch (e) {
+        content.innerHTML = `<p style="color: var(--accent-red);">Doktor çalıştırılamadı: ${e.message}</p>`;
+      }
+    }
+
+    function closeDoctorModal() {
+      document.getElementById("doctorModal").style.display = "none";
+    }
+
+    async function runDoctorFix() {
+      logConsole("--> Tablet Doktoru otomatik onarım başlatıyor...");
+      closeDoctorModal();
+      await runAction("doctor_fix");
+      openDoctorModal();
+    }
+
+    // Auto-fetch on load
+    window.addEventListener("DOMContentLoaded", () => {
+      fetchDevices();
+      setInterval(fetchDevices, 10000); // Poll devices every 10s
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,232 @@
+#!/bin/bash
+# ==============================================================================
+# MY TABLET SERVER - Multi-Device Manager & Scanner
+# ==============================================================================
+# Discovers, inspects, and manages multiple connected tablets (USB & Wi-Fi).
+# Eliminates confusion when multiple tablets are connected simultaneously.
+# ==============================================================================
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd || echo "")"
+CONFIG_DIR="$HOME/.config/my-tablet-server"
+ACTIVE_FILE="$CONFIG_DIR/active_device"
+mkdir -p "$CONFIG_DIR"
+
+GREEN='\033[01;32m'
+BLUE='\033[01;34m'
+YELLOW='\033[01;33m'
+RED='\033[01;31m'
+CYAN='\033[01;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+get_active_device() {
+    if [ -n "$TABLET_DEVICE" ]; then
+        echo "$TABLET_DEVICE"
+        return
+    fi
+    if [ -f "$ACTIVE_FILE" ]; then
+        cat "$ACTIVE_FILE" | tr -d '\r\n'
+        return
+    fi
+    echo ""
+}
+
+set_active_device() {
+    local DEV_ID="$1"
+    echo "$DEV_ID" > "$ACTIVE_FILE"
+}
+
+# Scan all connected devices
+scan_devices() {
+    local ACTIVE=$(get_active_device)
+    local DEVICES_FOUND=()
+
+    # 1. USB & ADB Connected Devices
+    local ADB_LIST=$(adb devices 2>/dev/null | grep -E "\b(device|unauthorized|offline)\b" || true)
+
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        local DEV_ID=$(echo "$line" | awk '{print $1}')
+        local DEV_STATE=$(echo "$line" | awk '{print $2}')
+        [ -z "$DEV_ID" ] && continue
+
+        local DEV_TYPE="usb"
+        if [[ "$DEV_ID" =~ [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            DEV_TYPE="wifi"
+        fi
+
+        local MODEL="Unknown"
+        local ANDROID_VER="?"
+        local BAT_CAP="?"
+        local BAT_STAT="?"
+        local TEMP="?"
+        local ROOT_STATE="no"
+        local IP="?"
+
+        if [ "$DEV_STATE" = "device" ]; then
+            MODEL=$(adb -s "$DEV_ID" shell getprop ro.product.model 2>/dev/null | tr -d '\r\n')
+            ANDROID_VER=$(adb -s "$DEV_ID" shell getprop ro.build.version.release 2>/dev/null | tr -d '\r\n')
+            [ -z "$MODEL" ] && MODEL="Android Tablet"
+
+            # Check root
+            local ROOT_CHECK=$(adb -s "$DEV_ID" shell "su -c 'id'" 2>/dev/null | tr -d '\r\n')
+            if [[ "$ROOT_CHECK" == *"uid=0"* ]]; then
+                ROOT_STATE="yes"
+            fi
+
+            # Battery & Temp
+            BAT_CAP=$(adb -s "$DEV_ID" shell "cat /sys/class/power_supply/battery/capacity 2>/dev/null" | tr -d '\r\n')
+            if [ -z "$BAT_CAP" ] || [[ ! "$BAT_CAP" =~ ^[0-9]+$ ]]; then
+                BAT_CAP=$(adb -s "$DEV_ID" shell "dumpsys battery 2>/dev/null | grep -i level | head -n1 | awk '{print \$2}'" | tr -d '\r\n')
+            fi
+            [ -z "$BAT_CAP" ] && BAT_CAP="?"
+
+            BAT_STAT=$(adb -s "$DEV_ID" shell "cat /sys/class/power_supply/battery/status 2>/dev/null" | tr -d '\r\n')
+            [ -z "$BAT_STAT" ] && BAT_STAT="Normal"
+
+            local RAW_TEMP=$(adb -s "$DEV_ID" shell "cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null" | tr -d '\r\n')
+            if [ -n "$RAW_TEMP" ] && [[ "$RAW_TEMP" =~ ^[0-9]+$ ]]; then
+                if [ "$RAW_TEMP" -gt 1000 ]; then
+                    TEMP="$(( RAW_TEMP / 1000 ))°C"
+                else
+                    TEMP="${RAW_TEMP}°C"
+                fi
+            else
+                TEMP="Normal"
+            fi
+
+            # Wi-Fi IP
+            IP=$(adb -s "$DEV_ID" shell "ip -4 addr show wlan0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n1" | tr -d '\r\n')
+            [ -z "$IP" ] && IP="Disconnected"
+        fi
+
+        local IS_ACTIVE=false
+        if [ "$DEV_ID" = "$ACTIVE" ] || ([ -z "$ACTIVE" ] && [ ${#DEVICES_FOUND[@]} -eq 0 ]); then
+            IS_ACTIVE=true
+            [ -z "$ACTIVE" ] && set_active_device "$DEV_ID"
+        fi
+
+        DEVICES_FOUND+=("$DEV_ID|$DEV_TYPE|$MODEL|$ANDROID_VER|$BAT_CAP|$BAT_STAT|$TEMP|$ROOT_STATE|$IP|$DEV_STATE|$IS_ACTIVE")
+    done <<< "$ADB_LIST"
+
+    # 2. Known Wi-Fi IPs if not in ADB
+    local KNOWN_IPS=()
+    if [ -f "$HOME/.ssh/config" ]; then
+        local SSH_IP=$(awk '/Host my-tablet-server/{flag=1; next} /Host /{flag=0} flag && /HostName/{print $2; exit}' "$HOME/.ssh/config" 2>/dev/null || true)
+        [ -n "$SSH_IP" ] && KNOWN_IPS+=("$SSH_IP")
+    fi
+    [ -f "$CONFIG_DIR/known_tablets.txt" ] && while IFS= read -r ip; do [ -n "$ip" ] && KNOWN_IPS+=("$ip"); done < "$CONFIG_DIR/known_tablets.txt"
+
+    for IP in "${KNOWN_IPS[@]}"; do
+        local ALREADY=false
+        for D in "${DEVICES_FOUND[@]}"; do
+            if [[ "$D" == *"$IP"* ]]; then
+                ALREADY=true
+                break
+            fi
+        done
+        if [ "$ALREADY" = false ]; then
+            if ping -c 1 -W 1 "$IP" >/dev/null 2>&1; then
+                local IS_ACTIVE=false
+                local DEV_ID="wifi:$IP"
+                [ "$DEV_ID" = "$ACTIVE" ] && IS_ACTIVE=true
+                DEVICES_FOUND+=("$DEV_ID|wifi|Network Tablet|Android|?|?|Normal|unknown|$IP|online|$IS_ACTIVE")
+            fi
+        fi
+    done
+
+    # Output formatted
+    for D in "${DEVICES_FOUND[@]}"; do
+        echo "$D"
+    done
+}
+
+output_json() {
+    local FIRST=true
+    echo "["
+    while IFS='|' read -r dev_id dev_type model android_ver bat_cap bat_stat temp root_state ip dev_state is_active; do
+        [ -z "$dev_id" ] && continue
+        if [ "$FIRST" = true ]; then
+            FIRST=false
+        else
+            echo ","
+        fi
+        cat << JSONEOF
+  {
+    "id": "$dev_id",
+    "type": "$dev_type",
+    "model": "$model",
+    "android": "$android_ver",
+    "battery": "$bat_cap",
+    "battery_status": "$bat_stat",
+    "temp": "$temp",
+    "root": "$root_state",
+    "ip": "$ip",
+    "state": "$dev_state",
+    "active": $is_active
+  }
+JSONEOF
+    done < <(scan_devices)
+    echo ""
+    echo "]"
+}
+
+output_table() {
+    local COUNT=0
+    echo -e "${CYAN}${BOLD}========================================================================================${NC}"
+    echo -e "${CYAN}${BOLD}                 📱 MY TABLET SERVER - CONNECTED TABLET DEVICES                          ${NC}"
+    echo -e "${CYAN}${BOLD}========================================================================================${NC}"
+    printf "${BOLD}%-3s %-18s %-6s %-18s %-8s %-8s %-6s %-15s %s${NC}\n" "SEL" "DEVICE ID" "TYPE" "MODEL" "BATTERY" "TEMP" "ROOT" "IP" "STATUS"
+    echo -e "----------------------------------------------------------------------------------------"
+
+    while IFS='|' read -r dev_id dev_type model android_ver bat_cap bat_stat temp root_state ip dev_state is_active; do
+        [ -z "$dev_id" ] && continue
+        COUNT=$((COUNT + 1))
+        local MARK="   "
+        if [ "$is_active" = "true" ]; then
+            MARK=" ${GREEN}▶${NC} "
+        fi
+        local ROOT_COLOR="${RED}No${NC}"
+        [ "$root_state" = "yes" ] && ROOT_COLOR="${GREEN}Yes${NC}"
+
+        local BAT_COLOR="${GREEN}${bat_cap}%${NC}"
+        if [ "$bat_cap" != "?" ]; then
+            [ "$bat_cap" -lt 30 ] && BAT_COLOR="${RED}${bat_cap}%${NC}"
+            [ "$bat_cap" -ge 80 ] && BAT_COLOR="${YELLOW}${bat_cap}%${NC}"
+        else
+            BAT_COLOR="?"
+        fi
+
+        printf "%b %-18s %-6s %-18s %-16b %-8s %-14b %-15s %s\n" "$MARK" "$dev_id" "$dev_type" "$model" "$BAT_COLOR" "$temp" "$ROOT_COLOR" "$ip" "$dev_state"
+    done < <(scan_devices)
+
+    if [ "$COUNT" -eq 0 ]; then
+        echo -e "  ${YELLOW}No tablets currently detected!${NC}"
+        echo -e "  Connect a tablet via USB (enable USB Debugging) or verify Wi-Fi connection."
+    fi
+    echo -e "${CYAN}========================================================================================${NC}"
+}
+
+case "$1" in
+    json|--json)
+        output_json
+        ;;
+    list|--list|"")
+        output_table
+        ;;
+    get-active|--get-active)
+        get_active_device
+        ;;
+    set-active|--set-active)
+        if [ -n "$2" ]; then
+            set_active_device "$2"
+            echo -e "${GREEN}✓ Active tablet set to: $2${NC}"
+        else
+            echo -e "${RED}[ERROR] Device ID required: tablet-devices set-active <device_id>${NC}"
+            exit 1
+        fi
+        ;;
+    *)
+        output_table
+        ;;
+esac

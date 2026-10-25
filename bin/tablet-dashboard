@@ -1,0 +1,49 @@
+#!/bin/bash
+# ==============================================================================
+# MY TABLET SERVER - Graphical Desktop Dashboard Launcher
+# ==============================================================================
+# Starts the lightweight local Python API backend and opens the modern
+# graphical multi-tablet control center in desktop app window mode.
+# ==============================================================================
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd || echo "")"
+PORT=5055
+URL="http://127.0.0.1:$PORT"
+
+GREEN='\033[01;32m'
+BLUE='\033[01;34m'
+YELLOW='\033[01;33m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+echo -e "${BLUE}${BOLD}======================================================================${NC}"
+echo -e "${BLUE}${BOLD}        📱 MY TABLET SERVER - LAUNCHING DESKTOP DASHBOARD             ${NC}"
+echo -e "${BLUE}${BOLD}======================================================================${NC}"
+
+# 1. Start Python API server if not already running
+if ! curl -s -o /dev/null -w "%{http_code}" "$URL/api/devices" 2>/dev/null | grep -q "200"; then
+    echo -e "${YELLOW}--> Starting local Python dashboard server on port $PORT...${NC}"
+    nohup python3 "$DIR/ui/server.py" >/tmp/tablet_dashboard.log 2>&1 &
+    sleep 1
+fi
+
+echo -e "${GREEN}✓ Dashboard backend is operational at: ${BOLD}$URL${NC}"
+
+# 2. Open in Dedicated Desktop Window Mode if Chrome/Chromium/Brave/Edge is present
+echo -e "${BLUE}--> Opening Graphical Control Center...${NC}\n"
+
+if which google-chrome >/dev/null 2>&1; then
+    exec google-chrome --app="$URL" --window-size=1200,850 >/dev/null 2>&1 &
+elif which chromium >/dev/null 2>&1; then
+    exec chromium --app="$URL" --window-size=1200,850 >/dev/null 2>&1 &
+elif which chromium-browser >/dev/null 2>&1; then
+    exec chromium-browser --app="$URL" --window-size=1200,850 >/dev/null 2>&1 &
+elif which brave >/dev/null 2>&1; then
+    exec brave --app="$URL" --window-size=1200,850 >/dev/null 2>&1 &
+elif which microsoft-edge >/dev/null 2>&1; then
+    exec microsoft-edge --app="$URL" --window-size=1200,850 >/dev/null 2>&1 &
+elif which xdg-open >/dev/null 2>&1; then
+    exec xdg-open "$URL" >/dev/null 2>&1 &
+else
+    echo -e "${GREEN}Please open your web browser and navigate to: ${BOLD}$URL${NC}"
+fi

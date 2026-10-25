@@ -46,6 +46,22 @@ get_primary_screen_info() {
 }
 
 detect_tablet() {
+    # Check if a specific device was set or selected
+    local PREF_DEV="${SPECIFIED_DEVICE:-$TABLET_DEVICE}"
+    if [ -z "$PREF_DEV" ] && [ -f "$HOME/.config/my-tablet-server/active_device" ]; then
+        PREF_DEV=$(cat "$HOME/.config/my-tablet-server/active_device" 2>/dev/null | tr -d '\r\n')
+    fi
+
+    if [ -n "$PREF_DEV" ]; then
+        if [[ "$PREF_DEV" == "wifi:"* ]]; then
+            echo "$PREF_DEV"
+            return
+        elif adb devices 2>/dev/null | grep -E "^${PREF_DEV}\s+device" >/dev/null 2>&1; then
+            echo "usb:$PREF_DEV"
+            return
+        fi
+    fi
+
     # Check USB tablets first
     for DEV in $(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}'); do
         local MODEL=$(adb -s "$DEV" shell "getprop ro.product.model" 2>/dev/null | tr -d '\r\n')
@@ -326,6 +342,12 @@ usage() {
     echo "  second-screen start left   # Tableti PC ekranının soluna ekler"
     echo "  second-screen stop         # Kapatır"
 }
+
+SPECIFIED_DEVICE=""
+if [ "$1" = "--device" ] || [ "$1" = "-s" ]; then
+    SPECIFIED_DEVICE="$2"
+    shift 2
+fi
 
 case "${1:-}" in
     start)

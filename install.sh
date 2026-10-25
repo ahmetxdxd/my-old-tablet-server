@@ -10,6 +10,13 @@ set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+FAST_MODE=false
+for arg in "$@"; do
+    if [ "$arg" = "-y" ] || [ "$arg" = "--quick" ] || [ "$arg" = "--fast" ] || [ "$arg" = "-f" ]; then
+        FAST_MODE=true
+    fi
+done
+
 # Colors
 GREEN='\033[01;32m'
 BLUE='\033[01;34m'
@@ -56,11 +63,37 @@ echo -e "${BLUE}  Android Version: ${ANDROID_VER:-4.4.2}${NC}"
 # Root verification
 echo -e "${YELLOW}[2/8] Verifying Root (su) Privileges...${NC}"
 ROOT_CHECK=$(adb shell "su -c 'id'" 2>/dev/null | tr -d '\r\n')
+ROOTLESS_MODE=false
+
 if [[ "$ROOT_CHECK" != *"uid=0"* ]]; then
-    echo -e "${RED}[ERROR] Root access could not be acquired! Ensure SuperSU / root access is granted on the tablet screen.${NC}"
-    exit 1
+    echo -e "\n${YELLOW}${BOLD}[DİKKAT / UYARI] Tablet üzerinde Root (su) erişimi tespit edilemedi!${NC}"
+    echo -e "  1. Tablet ekranını açın; SuperSU veya Magisk izin penceresi varsa 'İzin Ver' (Grant) butonuna dokunun."
+    echo -e "  2. Veya Root olmadan 'Rootsuz ADB Modu' (Non-Root) ile devam edebilirsiniz."
+    echo -e "     (Rootsuz Modda: Debloat, Ekran Koruyucular, Medya Hub, Web Kontrol Paneli ve Ses Aktarımı çalışır; Chroot Linux pasif kalır.)\n"
+    
+    read -p " Tekrar root kontrolü yapılsın mı? [E/h / (b)ypass]: " ROOT_CHOICE
+    case "$ROOT_CHOICE" in
+        [eE]|[eE][vV][eE][tT]|[yY]|[yY][eE][sS])
+            ROOT_CHECK=$(adb shell "su -c 'id'" 2>/dev/null | tr -d '\r\n')
+            if [[ "$ROOT_CHECK" != *"uid=0"* ]]; then
+                echo -e "${YELLOW}Root yine alınamadı. 'Rootsuz ADB Modu' ile devam ediliyor...${NC}"
+                ROOTLESS_MODE=true
+            else
+                echo -e "${GREEN}✓ Root Erişimi Onaylandı (uid=0).${NC}"
+            fi
+            ;;
+        [bB]|bypass)
+            echo -e "${YELLOW}Root kontrolü atlandı. Rootsuz ADB Modu seçildi.${NC}"
+            ROOTLESS_MODE=true
+            ;;
+        *)
+            echo -e "${YELLOW}Rootsuz ADB Modu seçildi.${NC}"
+            ROOTLESS_MODE=true
+            ;;
+    esac
+else
+    echo -e "${GREEN}✓ Root Access Verified (uid=0).${NC}"
 fi
-echo -e "${GREEN}✓ Root Access Verified (uid=0).${NC}"
 
 # Check for existing /data/local/linux installation
 EXISTING_INSTALL=$(adb shell "su -c '[ -d /data/local/linux ] && echo exists || echo none'" 2>/dev/null | tr -d '\r\n')
@@ -79,7 +112,12 @@ echo -e "   • Rogue background updaters, Samsung Apps and bloatware will be di
 echo -e "   • Thermal runaway fix (0% CPU idle) will be permanently deployed"
 echo -e "   • Android core framework, system drivers and Wi-Fi credentials are preserved"
 echo -e "${RED}${BOLD}======================================================================${NC}"
-read -p " Are you sure you want to proceed with a fresh installation? [y/N]: " CONFIRM_INSTALL
+if [ "$FAST_MODE" = true ]; then
+    CONFIRM_INSTALL="y"
+    echo -e "${GREEN}✓ Fast/Express mode enabled. Automatically proceeding with installation...${NC}\n"
+else
+    read -p " Are you sure you want to proceed with a fresh installation? [y/N]: " CONFIRM_INSTALL
+fi
 
 case "$CONFIRM_INSTALL" in
     [yY]|[yY][eE][sS])
@@ -256,9 +294,13 @@ ln -sf "$DIR/bin/tablet" "$HOME/.local/bin/tablet" 2>/dev/null || true
 ln -sf "$DIR/bin/tablet-terminal" "$HOME/.local/bin/tablet-terminal" 2>/dev/null || true
 ln -sf "$DIR/bin/tablet-terminal" "$HOME/.local/bin/tablet-term" 2>/dev/null || true
 ln -sf "$DIR/bin/tablet-menu" "$HOME/.local/bin/tablet-menu" 2>/dev/null || true
+ln -sf "$DIR/bin/tablet-dashboard" "$HOME/.local/bin/tablet-dashboard" 2>/dev/null || true
+ln -sf "$DIR/bin/tablet-doctor" "$HOME/.local/bin/tablet-doctor" 2>/dev/null || true
+ln -sf "$DIR/bin/tablet-devices" "$HOME/.local/bin/tablet-devices" 2>/dev/null || true
+ln -sf "$DIR/bin/battery-guard" "$HOME/.local/bin/battery-guard" 2>/dev/null || true
 ln -sf "$DIR/shortcuts/linux/.run_silent.sh" "$HOME/.local/bin/tablet-action" 2>/dev/null || true
 chmod +x "$DIR/shortcuts/linux"/*.sh "$DIR/shortcuts/linux/.run_silent.sh" 2>/dev/null || true
-echo -e "${GREEN}✓ PC Shortcuts installed to ~/.local/bin (tablet, tablet-terminal, tablet-menu, tablet-action).${NC}"
+echo -e "${GREEN}✓ PC Shortcuts installed to ~/.local/bin (tablet, tablet-dashboard, tablet-doctor, tablet-devices, tablet-menu).${NC}"
 
 "$DIR/bin/sync-wifi" || true
 
@@ -315,11 +357,22 @@ esac
 
 echo -e "\n${GREEN}${BOLD}======================================================================${NC}"
 echo -e "${GREEN}${BOLD}   CONGRATULATIONS! MY TABLET SERVER IS READY!                        ${NC}"
+# Install Desktop Shortcuts automatically
+"$DIR/bin/install-desktop-shortcut" >/dev/null 2>&1 || true
+
+echo -e "\n${GREEN}${BOLD}======================================================================${NC}"
+echo -e "${GREEN}${BOLD}       INSTALLATION & CONFIGURATION COMPLETED SUCCESSFULLY!           ${NC}"
 echo -e "${GREEN}${BOLD}======================================================================${NC}"
-echo -e "${BOLD}🚀 Fast Access & Remote Control (No SSH confusion):${NC}"
-echo -e "1. ${GREEN}tablet-terminal${NC} (or: ${YELLOW}tablet terminal${NC})"
+echo -e "${BOLD}🚀 Fast Access & Remote Control (Zero Terminal Required):${NC}"
+echo -e "0. 🌟 ${GREEN}Desktop Dashboard${NC} : ${YELLOW}tablet ui${NC} (or click Desktop / App Menu icon)"
+echo -e "1. 📱 ${GREEN}Multi-Tablet CLI${NC}  : ${YELLOW}tablet devices${NC} (switch between multiple tablets)"
+echo -e "2. 🩺 ${GREEN}Tablet Doctor${NC}     : ${YELLOW}tablet doctor --fix${NC} (one-click diagnostics & repairs)"
+echo -e "3. 🛡️ ${GREEN}Battery Guard${NC}     : ${YELLOW}tablet battery-guard${NC} (smart 24/7 anti-swelling protection)"
+echo -e "4. 🔄 ${GREEN}In-Place Update${NC}   : ${YELLOW}tablet update${NC} (upgrade without wiping user data)"
+echo -e "5. 🗑️ ${GREEN}Revert / Uninstall${NC}: ${YELLOW}tablet uninstall${NC} (fully restore tablet to factory state)"
+echo -e "6. ${GREEN}tablet-terminal${NC} (or: ${YELLOW}tablet terminal${NC})"
 echo -e "   Direct one-command access to tablet Linux console (automatic USB/Wi-Fi detection)."
-echo -e "2. ${GREEN}tablet-menu${NC} (or: ${YELLOW}tablet${NC})"
+echo -e "7. ${GREEN}tablet-menu${NC} (or: ${YELLOW}tablet${NC})"
 echo -e "   Interactive control panel: run any README command without entering tablet terminal."
 echo -e "3. ${GREEN}tablet <command>${NC}"
 echo -e "   Execute commands on tablet from PC directly (e.g. ${YELLOW}tablet status${NC}, ${YELLOW}tablet screensaver art${NC})."

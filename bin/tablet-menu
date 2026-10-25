@@ -77,14 +77,56 @@ BANNER
     echo -e "  ${GREEN}21${NC}) Turn Screen Light ON / OFF    ${CYAN}(ON: screen on, OFF: screen off)${NC}"
     echo -e "  ${GREEN}22${NC}) Set Speaker Hardware Volume   ${CYAN}(Range: 0 - 100)${NC}"
     echo -e ""
-    echo -e "  ${BOLD}[ ⌨️ CUSTOM COMMAND EXECUTION ]${NC}"
-    echo -e "  ${GREEN}23${NC}) Execute Custom Tablet Command ${CYAN}(watch, yt, alarm, play-sound...)${NC}"
+    echo -e "  ${BOLD}[ 🌟 GRAPHICAL DASHBOARD & DOCTOR ]${NC}"
+    echo -e "   ${GREEN}D${NC}) Open Modern Web Desktop UI     ${CYAN}(Graphical Multi-Tablet Dashboard)${NC}"
+    echo -e "  ${GREEN}24${NC}) Scan & Select Active Tablet    ${CYAN}(Multi-device switcher)${NC}"
+    echo -e "  ${GREEN}25${NC}) Tablet Doctor Diagnostics      ${CYAN}(Auto-check ADB, Root, SSH & fix)${NC}"
+    echo -e "  ${GREEN}26${NC}) Smart Battery Health Guard      ${CYAN}(Prevent 24/7 battery swelling)${NC}"
     echo -e ""
-    echo -e "   ${RED}0${NC}) Exit"
-    echo -e "${CYAN}----------------------------------------------------------------------${NC}"
-    read -rp "Please enter an option [0-23]: " CHOICE
+    echo -e "  ${BOLD}[ ⌨️ CUSTOM COMMAND EXECUTION ]${NC}
+  ${GREEN}23${NC}) Execute Custom Tablet Command ${CYAN}(watch, yt, alarm, play-sound...)${NC}
+
+   ${RED}0${NC}) Exit
+----------------------------------------------------------------------
+"
+    read -rp "Please enter an option [0-26, or D]: " CHOICE
 
     case "$CHOICE" in
+        d|D|ui|gui)
+            clear
+            exec "$DIR/tablet-dashboard"
+            ;;
+        24)
+            clear
+            "$DIR/tablet-devices"
+            echo ""
+            read -rp "Enter Device ID to set as Active (or press Enter to keep current): " NEW_ACT
+            if [ -n "$NEW_ACT" ]; then
+                "$DIR/tablet-devices" set-active "$NEW_ACT"
+            fi
+            pause
+            ;;
+        25)
+            clear
+            "$DIR/tablet-doctor"
+            echo ""
+            read -rp "Run automatic repairs now? [y/N]: " RUN_FIX
+            if [[ "$RUN_FIX" =~ ^[yY] ]]; then
+                "$DIR/tablet-doctor" --fix
+            fi
+            pause
+            ;;
+        26)
+            clear
+            "$DIR/battery-guard" status
+            echo ""
+            read -rp "Start Battery Guard background daemon? [y/N]: " RUN_BG
+            if [[ "$RUN_BG" =~ ^[yY] ]]; then
+                nohup "$DIR/battery-guard" daemon >/dev/null 2>&1 &
+                echo -e "\n${GREEN}✓ Battery Guard daemon started in background.${NC}"
+            fi
+            pause
+            ;;
         1)
             run_cmd "my-tablet-server status"
             ;;

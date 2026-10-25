@@ -77,6 +77,9 @@ git clone https://github.com/ahmetxdxd/my-old-tablet-server.git
 cd my-old-tablet-server
 chmod +x install.sh
 ./install.sh
+
+# Or for fast express setup (auto-confirm):
+./install.sh -y
 ```
 
 #### 🪟 On Windows:
@@ -92,8 +95,76 @@ The installer automatically:
 2. Auto-syncs your PC's active Wi-Fi credentials to the tablet.
 3. Deploys an Alpine Linux ARMv7 environment with OpenSSH, Python 3, and audio tools.
 4. Installs the zero-latency Dalvik AudioBridge and safe debloat configs.
-5. Deploys media tools and screensavers.
+5. Deploys media tools, screensavers, and installs Desktop app shortcuts.
 6. Sets up auto-boot on tablet restart (`/system/etc/install-recovery.sh`).
+
+---
+
+## 🔄 Upgrading from an Older Version (No Data Loss)
+
+If you already have an older version of My Tablet Server running on your tablet, **you do NOT need to wipe your tablet or reinstall from scratch!** Simply run the in-place updater to immediately gain access to the modern Web Dashboard, Multi-Device selector, Tablet Doctor, and Battery Guard:
+
+#### 🐧 On Linux & macOS:
+```bash
+tablet update
+# (or: ./update.sh)
+```
+
+#### 🪟 On Windows:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\update.ps1
+```
+
+The updater pulls the latest git commits, updates PC shortcuts & Desktop icons, and syncs updated binaries and tools to the tablet while preserving your Linux filesystem, packages, and custom configurations.
+
+---
+
+## 🗑️ Complete Uninstallation & Full Revert (Clean Restore)
+
+Want to completely remove My Tablet Server and restore both the tablet and PC to their original, untouched factory states?
+
+#### 🐧 On Linux & macOS:
+```bash
+tablet uninstall
+# (or: ./uninstall.sh)
+```
+
+#### 🪟 On Windows:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\uninstall.ps1
+```
+
+**What the uninstaller cleanly reverts:**
+* Terminates all background Linux daemons (`sshd`, `snapclient`, `AudioBridge`, `crond`).
+* Unmounts all virtual filesystems and completely removes `/data/local/linux`, `/data/local/alpine`, and AudioBridge.
+* Restores `/system/etc/install-recovery.sh` to its pristine original state (removes autoboot hook).
+* Unfreezes and restores all previously disabled Samsung and Android packages.
+* Removes all host PC symlinks (`~/.local/bin/tablet*`), Desktop shortcuts, and systemd services.
+
+---
+
+---
+
+## 🌟 Graphical Multi-Tablet Desktop Dashboard (Zero Terminal Required)
+
+Manage all connected tablets, switch between devices, launch second screens, stream audio, and diagnose issues with a modern, glassmorphic graphical desktop dashboard:
+
+```bash
+# On Linux & macOS:
+tablet ui
+# (or: tablet dashboard)
+```
+
+```cmd
+:: On Windows:
+:: Double-click 'shortcuts\windows\00-tablet-dashboard.bat' or run:
+tablet ui
+```
+
+* **📱 Multi-Device Control Center:** Automatically detects and displays all USB & Wi-Fi tablets with real-time battery bars, temperatures, and root status. Select your active target tablet with a single click.
+* **📻 True Stereo Channel Splitter:** Assign Left Channel (L) to Tablet 1 and Right Channel (R) to Tablet 2 visually from dropdown menus.
+* **🩺 Integrated Tablet Doctor:** Built-in auto-diagnostic tool checking ADB, permissions, network, thermal health, and one-click auto-repairs.
+* **🛡️ Smart Battery Health Guard:** Protects aging lithium batteries by preventing 24/7 overcharging and thermal runaway.
 
 ---
 
@@ -138,6 +209,24 @@ tablet-menu
 Execute any tablet command directly from your PC terminal in a single line:
 
 ```bash
+# Open Graphical Web & Desktop Dashboard
+tablet ui
+
+# Scan and inspect all connected tablets (multi-device)
+tablet devices
+
+# Auto-diagnose and fix connection / permissions
+tablet doctor --fix
+
+# Manage smart charging & battery swelling prevention
+tablet battery-guard
+
+# Upgrade to latest release without data loss
+tablet update
+
+# Revert all changes and restore tablet to stock
+tablet uninstall
+
 # Check tablet metrics, temperatures, battery & RAM
 tablet status
 
@@ -163,6 +252,7 @@ To trigger actions without opening or seeing any terminal window, use the **[`sh
 
 | Shortcut | Action on Double-Click |
 | :--- | :--- |
+| `00-tablet-dashboard` | **🌟 Launches Modern Multi-Tablet Graphical Desktop Control Center** |
 | `01-second-screen-usb` | **Instantly turns tablet into PC second monitor via USB (no terminal window!)** |
 | `02-second-screen-wifi` | Turns tablet into wireless second monitor over home Wi-Fi |
 | `03-second-screen-stop` | Closes second monitor and restores tablet home launcher |

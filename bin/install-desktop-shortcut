@@ -1,0 +1,69 @@
+#!/bin/bash
+# ==============================================================================
+# MY TABLET SERVER - Desktop Shortcut Installer
+# ==============================================================================
+# Installs one-click launcher shortcuts on the user's Desktop and App Menu.
+# ==============================================================================
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd || echo "")"
+ICON_PATH="$DIR/packages/icon.png"
+
+GREEN='\033[01;32m'
+BLUE='\033[01;34m'
+YELLOW='\033[01;33m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+echo -e "${BLUE}${BOLD}======================================================================${NC}"
+echo -e "${BLUE}${BOLD}         📱 INSTALLING TABLET DASHBOARD DESKTOP SHORTCUT              ${NC}"
+echo -e "${BLUE}${BOLD}======================================================================${NC}"
+
+# Find user's Desktop directory
+DESKTOP_DIR=""
+if which xdg-user-dir >/dev/null 2>&1; then
+    DESKTOP_DIR=$(xdg-user-dir DESKTOP 2>/dev/null)
+fi
+if [ -z "$DESKTOP_DIR" ] || [ ! -d "$DESKTOP_DIR" ]; then
+    if [ -d "$HOME/Desktop" ]; then
+        DESKTOP_DIR="$HOME/Desktop"
+    elif [ -d "$HOME/Masaüstü" ]; then
+        DESKTOP_DIR="$HOME/Masaüstü"
+    else
+        DESKTOP_DIR="$HOME"
+    fi
+fi
+
+APP_DIR="$HOME/.local/share/applications"
+mkdir -p "$APP_DIR" "$DESKTOP_DIR"
+
+DESKTOP_FILE="$DESKTOP_DIR/My-Tablet-Server.desktop"
+APP_FILE="$APP_DIR/my-tablet-server.desktop"
+
+CONTENT="[Desktop Entry]
+Version=1.0
+Type=Application
+Name=My Tablet Server
+GenericName=Tablet Control Center
+Comment=Manage legacy Android tablets as secondary monitors, audio speakers and Linux microservers
+Exec=$DIR/bin/tablet-dashboard
+Icon=preferences-system-devices
+Terminal=false
+Categories=Utility;System;AudioVideo;
+StartupNotify=true
+"
+
+# Write Desktop shortcut
+echo "$CONTENT" > "$DESKTOP_FILE"
+chmod +x "$DESKTOP_FILE"
+
+# Write Application menu shortcut
+echo "$CONTENT" > "$APP_FILE"
+chmod +x "$APP_FILE"
+
+# Trust desktop file on GNOME/KDE if gio or update-desktop-database is available
+which gio >/dev/null 2>&1 && gio set "$DESKTOP_FILE" metadata::trusted true 2>/dev/null || true
+which update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APP_DIR" 2>/dev/null || true
+
+echo -e "${GREEN}✓ Desktop shortcut created at:${NC} $DESKTOP_FILE"
+echo -e "${GREEN}✓ Application menu shortcut installed at:${NC} $APP_FILE"
+echo -e "${GREEN}✓ You can now launch My Tablet Server directly from your Desktop or App Launcher!${NC}\n"

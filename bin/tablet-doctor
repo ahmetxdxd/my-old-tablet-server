@@ -1,0 +1,250 @@
+#!/bin/bash
+# ==============================================================================
+# MY TABLET SERVER - System Doctor & Diagnostic Self-Healing Tool
+# ==============================================================================
+# Performs end-to-end health checks on ADB, Root, Wi-Fi, SSH, Audio, and Battery.
+# Automatically diagnoses issues and provides one-click fixes for end users.
+# ==============================================================================
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd || echo "")"
+CONFIG_DIR="$HOME/.config/my-tablet-server"
+mkdir -p "$CONFIG_DIR"
+
+GREEN='\033[01;32m'
+BLUE='\033[01;34m'
+YELLOW='\033[01;33m'
+RED='\033[01;31m'
+CYAN='\033[01;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+FIX_MODE=false
+[ "$1" = "--fix" ] || [ "$1" = "fix" ] && FIX_MODE=true
+JSON_MODE=false
+[ "$1" = "--json" ] || [ "$1" = "json" ] && JSON_MODE=true
+
+CHECKS_TOTAL=0
+CHECKS_PASSED=0
+CHECKS_WARNED=0
+CHECKS_FAILED=0
+DIAG_RESULTS=()
+
+add_result() {
+    local category="$1"
+    local status="$2" # ok, warn, fail
+    local title="$3"
+    local detail="$4"
+    local fix_hint="$5"
+
+    CHECKS_TOTAL=$((CHECKS_TOTAL + 1))
+    if [ "$status" = "ok" ]; then
+        CHECKS_PASSED=$((CHECKS_PASSED + 1))
+    elif [ "$status" = "warn" ]; then
+        CHECKS_WARNED=$((CHECKS_WARNED + 1))
+    else
+        CHECKS_FAILED=$((CHECKS_FAILED + 1))
+    fi
+
+    DIAG_RESULTS+=("$category|$status|$title|$detail|$fix_hint")
+}
+
+# 1. Check Host ADB Tools
+check_adb_host() {
+    if which adb >/dev/null 2>&1; then
+        local ADB_VER=$(adb version 2>/dev/null | head -n1)
+        add_result "ADB" "ok" "ADB Client Installed" "$ADB_VER" ""
+    else
+        add_result "ADB" "fail" "ADB Not Found" "The 'adb' command is missing on host PC." "Install adb via package manager (e.g. sudo apt install adb / winget install Google.PlatformTools)."
+        return 1
+    fi
+}
+
+# 2. Check Device Connectivity
+check_devices() {
+    local DEVICES=$(adb devices 2>/dev/null | grep -v "List of devices" | grep -E "\b(device|unauthorized|offline)\b" || true)
+
+    if [ -z "$DEVICES" ]; then
+        # Check if Wi-Fi IP is reachable
+        local TARGET_IP=""
+        if [ -f "$HOME/.ssh/config" ]; then
+            TARGET_IP=$(awk '/Host my-tablet-server/{flag=1; next} /Host /{flag=0} flag && /HostName/{print $2; exit}' "$HOME/.ssh/config" 2>/dev/null || true)
+        fi
+        if [ -n "$TARGET_IP" ] && ping -c 1 -W 1 "$TARGET_IP" >/dev/null 2>&1; then
+            add_result "Connection" "ok" "Tablet Reachable via Wi-Fi" "Ping successful to $TARGET_IP" ""
+        else
+            add_result "Connection" "fail" "No Tablet Detected" "No ADB USB device found and Wi-Fi IP unreachable." "Connect tablet via USB with USB Debugging enabled, or connect to same Wi-Fi."
+        fi
+        return
+    fi
+
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        local DEV_ID=$(echo "$line" | awk '{print $1}')
+        local DEV_STATE=$(echo "$line" | awk '{print $2}')
+
+        if [ "$DEV_STATE" = "unauthorized" ]; then
+            add_result "Connection" "fail" "Device Unauthorized ($DEV_ID)" "USB debugging permission not granted on tablet screen." "Unlock the tablet and tap 'Allow USB debugging / Always allow from this computer'."
+        elif [ "$DEV_STATE" = "offline" ]; then
+            add_result "Connection" "warn" "Device Offline ($DEV_ID)" "ADB connection is in offline state." "Unplug and re-plug USB cable, or run: adb kill-server && adb devices"
+        elif [ "$DEV_STATE" = "device" ]; then
+            local MODEL=$(adb -s "$DEV_ID" shell getprop ro.product.model 2>/dev/null | tr -d '\r\n')
+            add_result "Connection" "ok" "Device Connected ($MODEL)" "ADB Serial: $DEV_ID" ""
+
+            # Check Root
+            local ROOT_CHECK=$(adb -s "$DEV_ID" shell "su -c 'id'" 2>/dev/null | tr -d '\r\n')
+            if [[ "$ROOT_CHECK" == *"uid=0"* ]]; then
+                add_result "Root" "ok" "Root Access Verified" "UID 0 (SuperSU / Magisk active)" ""
+            else
+                add_result "Root" "warn" "Root Access Missing" "Root not acquired. Chroot Linux server requires root." "Grant root in SuperSU on tablet, or use ADB Non-Root Mode (screensaver, debloat, media)."
+            fi
+
+            # Check Wi-Fi IP
+            local IP=$(adb -s "$DEV_ID" shell "ip -4 addr show wlan0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n1" | tr -d '\r\n')
+            if [ -n "$IP" ]; then
+                add_result "Network" "ok" "Tablet Wi-Fi Connected" "IP Address: $IP" ""
+            else
+                add_result "Network" "warn" "Tablet Wi-Fi Disconnected" "wlan0 has no IPv4 address." "Connect tablet to your Wi-Fi network or run 'tablet sync-wifi'."
+            fi
+
+            # Check Battery & Thermal Health
+            local TEMP_RAW=$(adb -s "$DEV_ID" shell "cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null" | tr -d '\r\n')
+            local TEMP="Normal"
+            if [ -n "$TEMP_RAW" ] && [[ "$TEMP_RAW" =~ ^[0-9]+$ ]]; then
+                [ "$TEMP_RAW" -gt 1000 ] && TEMP="$(( TEMP_RAW / 1000 ))°C" || TEMP="${TEMP_RAW}°C"
+                local NUM_TEMP=$(echo "$TEMP" | grep -oP '\d+')
+                if [ -n "$NUM_TEMP" ] && [ "$NUM_TEMP" -ge 48 ]; then
+                    add_result "Thermal" "fail" "High Temperature ($TEMP)" "Tablet is running hot (>48°C)!" "Run 'tablet screen off' or thermal fix to prevent overheating."
+                else
+                    add_result "Thermal" "ok" "Temperature Normal ($TEMP)" "Safe operating range." ""
+                fi
+            else
+                add_result "Thermal" "ok" "Thermal Zone OK" "Standard operating range." ""
+            fi
+
+            local BAT_CAP=$(adb -s "$DEV_ID" shell "cat /sys/class/power_supply/battery/capacity 2>/dev/null" | tr -d '\r\n')
+            if [ -n "$BAT_CAP" ] && [[ "$BAT_CAP" =~ ^[0-9]+$ ]]; then
+                if [ "$BAT_CAP" -eq 100 ]; then
+                    add_result "Battery" "warn" "Battery at 100% (Swelling Risk)" "Constant 100% charge causes battery degradation." "Enable 'tablet battery-guard' to restrict charging or disconnect charger intermittently."
+                else
+                    add_result "Battery" "ok" "Battery Capacity: $BAT_CAP%" "Healthy battery charge level." ""
+                fi
+            fi
+
+            # Check SSH Port Forwarding
+            adb forward tcp:2222 tcp:22 2>/dev/null || true
+            if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -p 2222 -q root@127.0.0.1 "exit" 2>/dev/null; then
+                add_result "SSH" "ok" "SSH Server Operational" "Connected via port 2222" ""
+            else
+                add_result "SSH" "warn" "SSH Server Unreachable" "Cannot connect to port 2222." "Run 'tablet-doctor --fix' to restart SSH daemon."
+            fi
+        fi
+    done <<< "$DEVICES"
+}
+
+# Auto-Fix Procedures
+run_auto_fix() {
+    echo -e "\n${BLUE}${BOLD}[DOCTOR AUTO-FIX] Attempting automatic repairs...${NC}"
+
+    # 1. Restart ADB server
+    echo -e "${YELLOW}--> Restarting ADB daemon...${NC}"
+    adb kill-server 2>/dev/null || true
+    sleep 1
+    adb start-server 2>/dev/null || true
+
+    # 2. Re-establish port forward
+    echo -e "${YELLOW}--> Refreshing port forwards (2222 -> 22)...${NC}"
+    adb forward tcp:2222 tcp:22 2>/dev/null || true
+
+    # 3. Wake up tablet screen & dismiss keyguard if locked
+    local DEV=$(adb devices 2>/dev/null | grep -E "\bdevice$" | awk '{print $1}' | head -n1 || true)
+    if [ -n "$DEV" ]; then
+        echo -e "${YELLOW}--> Waking up tablet and keeping alive...${NC}"
+        adb -s "$DEV" shell "input keyevent 82 2>/dev/null || true"
+
+        # Check and restart SSH if chroot exists
+        echo -e "${YELLOW}--> Checking tablet SSH daemon status...${NC}"
+        adb -s "$DEV" shell "su -c '
+            if [ -d /data/local/linux ]; then
+                L=/data/local/linux/lib/ld-musl-armhf.so.1
+                B=/data/local/linux/bin/busybox
+                R=/data/local/linux
+                \$L \$B chroot \$R /usr/sbin/sshd 2>/dev/null || true
+            fi
+        '" 2>/dev/null || true
+    fi
+
+    echo -e "${GREEN}✓ Auto-repair sequence completed.${NC}\n"
+}
+
+# Run diagnostics
+check_adb_host
+check_devices
+
+if [ "$FIX_MODE" = true ]; then
+    run_auto_fix
+    # Re-run checks
+    CHECKS_TOTAL=0; CHECKS_PASSED=0; CHECKS_WARNED=0; CHECKS_FAILED=0; DIAG_RESULTS=()
+    check_adb_host
+    check_devices
+fi
+
+if [ "$JSON_MODE" = true ]; then
+    echo "{"
+    echo "  \"total\": $CHECKS_TOTAL,"
+    echo "  \"passed\": $CHECKS_PASSED,"
+    echo "  \"warned\": $CHECKS_WARNED,"
+    echo "  \"failed\": $CHECKS_FAILED,"
+    echo "  \"checks\": ["
+    FIRST=true
+    for item in "${DIAG_RESULTS[@]}"; do
+        IFS='|' read -r category status title detail fix_hint <<< "$item"
+        if [ "$FIRST" = true ]; then FIRST=false; else echo ","; fi
+        cat << JEOF
+    {
+      "category": "$category",
+      "status": "$status",
+      "title": "$title",
+      "detail": "$detail",
+      "fix": "$fix_hint"
+    }
+JEOF
+    done
+    echo ""
+    echo "  ]"
+    echo "}"
+    exit 0
+fi
+
+# Terminal Report
+echo -e "${CYAN}${BOLD}======================================================================${NC}"
+echo -e "${CYAN}${BOLD}           🩺 MY TABLET SERVER - SYSTEM DOCTOR & DIAGNOSTICS          ${NC}"
+echo -e "${CYAN}${BOLD}======================================================================${NC}"
+
+for item in "${DIAG_RESULTS[@]}"; do
+    IFS='|' read -r category status title detail fix_hint <<< "$item"
+    case "$status" in
+        ok)
+            echo -e "  ${GREEN}✓ [OK]    ${BOLD}$title${NC}"
+            [ -n "$detail" ] && echo -e "            $detail"
+            ;;
+        warn)
+            echo -e "  ${YELLOW}▲ [WARN]  ${BOLD}$title${NC}"
+            [ -n "$detail" ] && echo -e "            ${YELLOW}$detail${NC}"
+            [ -n "$fix_hint" ] && echo -e "            ${CYAN}💡 Fix: $fix_hint${NC}"
+            ;;
+        fail)
+            echo -e "  ${RED}✗ [FAIL]  ${BOLD}$title${NC}"
+            [ -n "$detail" ] && echo -e "            ${RED}$detail${NC}"
+            [ -n "$fix_hint" ] && echo -e "            ${CYAN}💡 Fix: $fix_hint${NC}"
+            ;;
+    esac
+    echo ""
+done
+
+echo -e "${CYAN}----------------------------------------------------------------------${NC}"
+echo -e "Summary: ${GREEN}$CHECKS_PASSED Passed${NC} | ${YELLOW}$CHECKS_WARNED Warnings${NC} | ${RED}$CHECKS_FAILED Failed${NC}"
+
+if [ "$CHECKS_FAILED" -gt 0 ] || [ "$CHECKS_WARNED" -gt 0 ]; then
+    echo -e "\n${YELLOW}💡 Tip: Run 'tablet doctor --fix' or click 'Auto-Repair' in Dashboard to fix common issues.${NC}"
+fi
+echo -e "${CYAN}======================================================================${NC}"
