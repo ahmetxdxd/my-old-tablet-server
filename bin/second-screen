@@ -21,9 +21,9 @@ NC='\033[0m'
 
 PORT=5900
 PASSWORD="tablet123"
-RESOLUTION="1024x600"
-RES_W=1024
-RES_H=600
+RESOLUTION="800x480"
+RES_W=800
+RES_H=480
 
 log_info() { echo -e "${BLUE}[BİLGİ]${NC} $1"; }
 log_ok()   { echo -e "${GREEN}[TAMAM] ✓${NC} $1"; }

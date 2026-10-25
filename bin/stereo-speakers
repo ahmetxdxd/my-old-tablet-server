@@ -201,12 +201,12 @@ start_speakers() {
             log_ok "Wi-Fi ses tüneli hazır."
         fi
 
-        # Start continuous audio streaming loop via systemd-run
+        # Start continuous audio streaming loop via systemd-run (Ultra Light Low-Latency Mode)
         systemctl --user stop tablet-audio 2>/dev/null || true
         systemctl --user reset-failed tablet-audio 2>/dev/null || true
         systemd-run --user --unit=tablet-audio \
-            /bin/bash -c "while true; do parec -d @DEFAULT_SINK@.monitor --rate=44100 --channels=2 --format=s16le 2>/dev/null | socat - TCP:127.0.0.1:4711 2>/dev/null || true; sleep 0.5; done" >/dev/null 2>&1
-        log_ok "Doğrudan PipeWire PCM Ses Akışı aktif (44.1kHz 16-bit Stereo -> Tablet Hoparlörleri)."
+            /bin/bash -c "while true; do parec -d @DEFAULT_SINK@.monitor --rate=44100 --channels=2 --format=s16le --latency-msec=15 --process-time-msec=15 2>/dev/null | socat -b 1024 - TCP:127.0.0.1:4711,nodelay,so-sndbuf=2048 2>/dev/null || true; sleep 0.2; done" >/dev/null 2>&1
+        log_ok "Doğrudan Ultra Light PipeWire PCM Ses Akışı aktif (15ms Düşük Gecikme, TCP_NODELAY, Sıfır Tampon Birikmesi)."
 
     else
         # 3. Start Snapserver in background
