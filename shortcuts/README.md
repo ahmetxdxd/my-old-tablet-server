@@ -51,3 +51,4 @@ This folder contains double-clickable shortcuts to manage and trigger all tablet
 | `20-tablet-menu` | **Opens the full interactive Quick Control Menu (tablet-menu)** |
 | `21-tablet-terminal` | **Connects directly to live tablet Linux console (tablet-terminal)** |
 | `22-auto-downloader` | Downloads and provisions media packages and Python wheels |
+| `23-screensaver-dvd` | Starts classic bouncing DVD logo screensaver with color changes & corner hits |

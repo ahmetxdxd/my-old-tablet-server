@@ -167,7 +167,11 @@ show_list() {
     echo -e "${BOLD}4) matrix / hacker${NC}"
     echo "   Zümrüt yeşili dijital siber yağmur akışı"
     echo ""
-    echo -e "${BOLD}5) custom <dosya.mp4>${NC}"
+    echo -e "${BOLD}5) dvd / bouncing-dvd${NC}"
+    echo "   Nostaljik seken DVD logosu ekran koruyucusu (Kenarlardan"
+    echo "   sektikçe renk değiştirir, efsanevi köşe vuruşu içerir)"
+    echo ""
+    echo -e "${BOLD}6) custom <dosya.mp4>${NC}"
     echo "   İstediğiniz herhangi bir MP4 video dosyasını oynatın"
     echo "======================================================"
 }
@@ -181,17 +185,19 @@ interactive_menu() {
     echo "  2) Tropikal Resif Akvaryumu (aquarium)"
     echo "  3) Çıtırdayan Şömine Ateşi (fireplace)"
     echo "  4) Matrix Siber Yağmur (matrix)"
-    echo "  5) Ekran Koruyucuyu Durdur (stop)"
+    echo "  5) Nostaljik DVD Logosu (dvd)"
+    echo "  6) Ekran Koruyucuyu Durdur (stop)"
     echo "  q) Çıkış"
     echo ""
-    read -p "Seçiminiz [1-5/q]: " CHOICE
+    read -p "Seçiminiz [1-6/q]: " CHOICE
 
     case "$CHOICE" in
         1) start_screensaver "$CATALOG_DIR/aero_art.mp4" "Frutiger Aero Sanat Tablosu" ;;
         2) start_screensaver "$CATALOG_DIR/aquarium.mp4" "Tropikal Akvaryum" ;;
         3) start_screensaver "$CATALOG_DIR/fireplace.mp4" "Şömine Ateşi" ;;
         4) start_screensaver "$CATALOG_DIR/matrix.mp4" "Matrix Siber Yağmur" ;;
-        5) stop_screensaver ;;
+        5) start_screensaver "$CATALOG_DIR/dvd.mp4" "Nostaljik DVD Logosu" ;;
+        6) stop_screensaver ;;
         q|Q) exit 0 ;;
         *) echo "Geçersiz seçim."; exit 1 ;;
     esac
@@ -211,6 +217,9 @@ case "$CMD" in
         ;;
     matrix|hacker)
         start_screensaver "$CATALOG_DIR/matrix.mp4" "Matrix Siber Yağmur"
+        ;;
+    dvd|bouncing-dvd|dvd-logo)
+        start_screensaver "$CATALOG_DIR/dvd.mp4" "Nostaljik DVD Logosu"
         ;;
     custom|play)
         shift
@@ -246,6 +255,7 @@ case "$CMD" in
         echo "  screensaver aquarium          : Tropikal Resif Akvaryumu başlatır"
         echo "  screensaver fireplace         : Çıtırdayan Şömine başlatır"
         echo "  screensaver matrix            : Matrix Siber Yağmur başlatır"
+        echo "  screensaver dvd               : Nostaljik Bouncing DVD Logosu başlatır"
         echo "  screensaver custom <dosya.mp4>: Özel video oynatır"
         echo "  screensaver stop              : Ekran koruyucuyu durdurur"
         echo "  screensaver status            : Aktif tema ve durumu gösterir"

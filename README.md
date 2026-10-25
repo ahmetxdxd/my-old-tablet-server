@@ -173,6 +173,7 @@ To trigger actions without opening or seeing any terminal window, use the **[`sh
 | `08-screensaver-aquarium` | Starts tropical coral reef live aquarium video loop |
 | `09-screensaver-fireplace` | Starts cozy burning fireplace video loop |
 | `10-screensaver-matrix` | Starts cyber green Matrix digital rain |
+| `23-screensaver-dvd` | Starts classic bouncing DVD logo screensaver (with color changes & corner hits) |
 | `12-anime-app` | Opens AnimeDLR ad-free anime streaming app |
 | `13-lofi-radio` | Streams 24/7 chill lofi hip hop beats |
 | `14-safe-debloat` | Safely freezes 60+ bloatware packages and recovers up to 70% RAM |
@@ -351,7 +352,7 @@ AI agents can directly:
 | `stereo-speakers cava` | Launch live audio frequency spectrum visualizer |
 | `stereo-speakers stop` | Stop stereo audio streaming |
 | `anime app` | Open AnimeDLR ad-free anime app |
-| `screensaver <theme>` | Start screensaver (`art`, `aquarium`, `fireplace`, `matrix`) |
+| `screensaver <theme>` | Start screensaver (`art`, `aquarium`, `fireplace`, `matrix`, `dvd`) |
 | `screensaver stop` | Stop screensaver |
 | `debloat-tablet` | Safely freeze 60+ bloatware packages |
 | `screen on / off` | Turn LCD backlight on or off |

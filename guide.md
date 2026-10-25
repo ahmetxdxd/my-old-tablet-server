@@ -284,6 +284,7 @@ screensaver start aquarium   # Live aquarium
 screensaver start aero       # Frutiger Aero landscape
 screensaver start fireplace  # Fireplace
 screensaver start matrix     # Matrix code
+screensaver start dvd        # Classic bouncing DVD logo (with color changes & corner hits)
 
 # Stop the screensaver:
 screensaver stop
