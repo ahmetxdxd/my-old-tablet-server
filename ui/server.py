@@ -173,6 +173,31 @@ class TabletServerHandler(SimpleHTTPRequestHandler):
                 cmd = [os.path.join(BIN_DIR, "battery-guard"), "check"]
             elif action == "reboot":
                 cmd = [os.path.join(BIN_DIR, "tablet"), "run", "reboot"]
+            elif action == "retro_game":
+                game = body.get("game", "")
+                cmd = [os.path.join(BIN_DIR, "tablet"), "run", "retro-store", game]
+            elif action == "anime_app":
+                cmd = [os.path.join(BIN_DIR, "tablet"), "anime", "app"]
+            elif action == "anime_watch":
+                cmd = [os.path.join(BIN_DIR, "tablet"), "watch"]
+            elif action == "radio":
+                genre = body.get("genre", "lofi")
+                cmd = [os.path.join(BIN_DIR, "tablet"), "radio", genre]
+            elif action == "alarm":
+                cmd = [os.path.join(BIN_DIR, "tablet"), "alarm", "play"]
+            elif action == "alarm_stop":
+                cmd = [os.path.join(BIN_DIR, "tablet"), "alarm", "stop"]
+            elif action == "play_sound":
+                cmd = [os.path.join(BIN_DIR, "tablet"), "play-sound"]
+            elif action == "cctv_start":
+                cmd = [os.path.join(BIN_DIR, "tablet"), "run", "cctv", "start"]
+            elif action == "cctv_stop":
+                cmd = [os.path.join(BIN_DIR, "tablet"), "run", "cctv", "stop"]
+            elif action == "open_terminal":
+                cmd = [os.path.join(BIN_DIR, "tablet-terminal")]
+                subprocess.Popen(["x-terminal-emulator", "-e", os.path.join(BIN_DIR, "tablet-terminal")])
+                self.send_json({"success": True, "output": "Terminal window launched."})
+                return
             else:
                 self.send_json({"success": False, "message": f"Unknown action: {action}"}, status=400)
                 return

@@ -38,7 +38,7 @@
     }
 
     .container {
-      max-width: 1200px;
+      max-width: 1240px;
       margin: 0 auto;
     }
 
@@ -130,6 +130,12 @@
       color: white;
     }
 
+    .btn-purple {
+      background: linear-gradient(135deg, #6d28d9, #8b5cf6);
+      border-color: rgba(139, 92, 246, 0.4);
+      color: white;
+    }
+
     .btn-danger {
       background: rgba(239, 68, 68, 0.15);
       border-color: rgba(239, 68, 68, 0.3);
@@ -140,7 +146,7 @@
       background: rgba(239, 68, 68, 0.25);
     }
 
-    /* WI-FI QUICK CONNECT BOX */
+    /* WI-FI QUICK CONNECT BAR */
     .wifi-connect-box {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
@@ -312,50 +318,12 @@
       transition: width 0.3s ease;
     }
 
-    /* STEREO ASSIGNMENT ROW */
-    .stereo-bar {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 14px;
-      padding: 14px 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 24px;
-      flex-wrap: wrap;
-      gap: 14px;
-    }
-
-    .stereo-channels {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
-
-    .channel-select {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 13px;
-    }
-
-    select {
-      background: #111827;
-      color: var(--text);
-      border: 1px solid var(--card-border);
-      padding: 6px 12px;
-      border-radius: 8px;
-      font-size: 13px;
-      outline: none;
-    }
-
     /* MAIN ACTIONS GRID */
     .main-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
       gap: 20px;
-      margin-bottom: 24px;
+      margin-bottom: 28px;
     }
 
     .panel-card {
@@ -389,6 +357,36 @@
       flex-wrap: wrap;
       gap: 8px;
       margin-top: auto;
+    }
+
+    .channel-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .channel-box {
+      flex: 1;
+      min-width: 140px;
+    }
+
+    .channel-box label {
+      display: block;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    select {
+      background: #111827;
+      color: var(--text);
+      border: 1px solid var(--card-border);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      outline: none;
+      width: 100%;
     }
 
     .volume-slider-wrap {
@@ -557,30 +555,11 @@
       </div>
     </div>
 
-    <!-- DUAL STEREO ASSIGNMENT BAR -->
-    <div class="stereo-bar">
-      <div style="display: flex; align-items: center; gap: 10px;">
-        <span style="font-size: 20px;">📻</span>
-        <div>
-          <strong style="font-size: 14px;">Dual Tablet Stereo Audio Setup</strong>
-          <p style="font-size: 12px; color: var(--text-muted);">Synchronized true stereo output with separate left and right channels</p>
-        </div>
-      </div>
-      <div class="stereo-channels">
-        <div class="channel-select">
-          <span>Left Channel (L):</span>
-          <select id="leftDeviceSelect"><option value="">Auto Detect</option></select>
-        </div>
-        <div class="channel-select">
-          <span>Right Channel (R):</span>
-          <select id="rightDeviceSelect"><option value="">Auto Detect</option></select>
-        </div>
-        <button class="btn btn-primary" onclick="runAction('stereo_start')">▶ Start Stereo</button>
-        <button class="btn btn-danger" onclick="runAction('stereo_stop')">⏹ Stop</button>
-      </div>
+    <!-- CORE FEATURES GRID -->
+    <div class="section-title">
+      <span>⚡ Core Operations & Displays</span>
     </div>
 
-    <!-- MAIN FEATURES GRID -->
     <div class="main-grid">
       
       <!-- 1. SECOND MONITOR -->
@@ -605,15 +584,37 @@
         </div>
       </div>
 
-      <!-- 2. STEREO AUDIO & CAVA -->
+      <!-- 2. DUAL STEREO AUDIO SPLITTER (CARD FORMAT) -->
       <div class="panel-card">
-        <div class="card-title">📻 Stereo Speakers & CAVA Visualizer</div>
+        <div class="card-title">📻 Dual Tablet Stereo Speakers</div>
         <div class="card-desc">
-          Stream PC audio directly to tablet speakers with zero audio drift and watch live frequency spectrum bars.
+          Split audio between two tablets placed on left and right sides of your desk with true stereo separation.
+        </div>
+        <div class="channel-row">
+          <div class="channel-box">
+            <label>Left Channel (L):</label>
+            <select id="leftDeviceSelect"><option value="">Auto Detect</option></select>
+          </div>
+          <div class="channel-box">
+            <label>Right Channel (R):</label>
+            <select id="rightDeviceSelect"><option value="">Auto Detect</option></select>
+          </div>
         </div>
         <div class="actions-wrap">
-          <button class="btn" onclick="runAction('stereo_cava')">📊 CAVA Spectrum</button>
+          <button class="btn btn-primary" onclick="runAction('stereo_start')">▶ Start Stereo</button>
           <button class="btn btn-danger" onclick="runAction('stereo_stop')">⏹ Stop Audio</button>
+        </div>
+      </div>
+
+      <!-- 3. CAVA SPECTRUM & VOLUME CONTROL -->
+      <div class="panel-card">
+        <div class="card-title">📊 CAVA Visualizer & Audio Volume</div>
+        <div class="card-desc">
+          Watch real-time audio spectrum frequency waves and adjust tablet hardware speaker volume.
+        </div>
+        <div class="actions-wrap">
+          <button class="btn btn-purple" onclick="runAction('stereo_cava')">📊 Open CAVA Spectrum</button>
+          <button class="btn" onclick="runAction('play_sound')">🔔 Test Audio Chime</button>
         </div>
         <div class="volume-slider-wrap">
           <span style="font-size: 13px;">🔊</span>
@@ -622,7 +623,7 @@
         </div>
       </div>
 
-      <!-- 3. SCREENSAVERS & AMBIENT -->
+      <!-- 4. SCREENSAVERS & AMBIENT -->
       <div class="panel-card">
         <div class="card-title">🌸 Ambient Display & Screensavers</div>
         <div class="card-desc">
@@ -638,7 +639,7 @@
         </div>
       </div>
 
-      <!-- 4. OPERATING MODES & POWER -->
+      <!-- 5. OPERATING MODES & POWER -->
       <div class="panel-card">
         <div class="card-title">⚡ Operating Modes & Power</div>
         <div class="card-desc">
@@ -653,7 +654,7 @@
         </div>
       </div>
 
-      <!-- 5. MAINTENANCE & SYSTEM TOOLS -->
+      <!-- 6. MAINTENANCE & SYSTEM TOOLS -->
       <div class="panel-card">
         <div class="card-title">🧹 Maintenance & Diagnostics</div>
         <div class="card-desc">
@@ -663,6 +664,70 @@
           <button class="btn btn-green" onclick="runAction('debloat')">🛡️ Safe Debloat</button>
           <button class="btn" onclick="openDoctorModal()">🩺 Tablet Doctor</button>
           <button class="btn btn-danger" onclick="confirmReboot()">🔄 Reboot Tablet</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RETRO APPS, MEDIA HUB & EXTRA SHORTCUTS -->
+    <div class="section-title">
+      <span>🎮 Retro Games, Media Hub & Extra Shortcuts</span>
+    </div>
+
+    <div class="main-grid">
+
+      <!-- RETRO GAMES STORE -->
+      <div class="panel-card">
+        <div class="card-title">🕹️ Nostalgic Retro Games & Apps</div>
+        <div class="card-desc">
+          Launch pre-configured nostalgic Android 4.4 KitKat games and retro apps directly on tablet screen.
+        </div>
+        <div class="actions-wrap">
+          <button class="btn" onclick="runAction('retro_game', {game: 'tom'})">🐾 Talking Tom</button>
+          <button class="btn" onclick="runAction('retro_game', {game: 'cakmak'})">🔥 Virtual Lighter</button>
+          <button class="btn" onclick="runAction('retro_game', {game: 'flappy'})">🐤 Flappy Bird</button>
+          <button class="btn" onclick="runAction('retro_game', {game: 'temple'})">🏃 Temple Run</button>
+          <button class="btn btn-primary" onclick="runAction('retro_game', {game: ''})">📦 Open Retro Store</button>
+        </div>
+      </div>
+
+      <!-- AD-FREE ANIME & VIDEO -->
+      <div class="panel-card">
+        <div class="card-title">🎌 Ad-Free Anime & Video Player</div>
+        <div class="card-desc">
+          Hardware-accelerated video streaming with ad-free anime player and YouTube video streamer.
+        </div>
+        <div class="actions-wrap">
+          <button class="btn btn-primary" onclick="runAction('anime_app')">🎌 Launch AnimeDLR</button>
+          <button class="btn" onclick="runAction('anime_watch')">▶ VLC Player Stream</button>
+        </div>
+      </div>
+
+      <!-- 24/7 INTERNET RADIO -->
+      <div class="panel-card">
+        <div class="card-title">📻 24/7 Live Internet Radio</div>
+        <div class="card-desc">
+          Relaxing background audio streams playing directly from tablet hardware speakers over Wi-Fi.
+        </div>
+        <div class="actions-wrap">
+          <button class="btn" onclick="runAction('radio', {genre: 'lofi'})">☕ 24/7 Lofi Hip Hop</button>
+          <button class="btn" onclick="runAction('radio', {genre: 'jazz'})">🎷 Smooth Jazz Cafe</button>
+          <button class="btn" onclick="runAction('radio', {genre: 'rock'})">🎸 Classic Rock</button>
+          <button class="btn btn-danger" onclick="runAction('radio', {genre: 'stop'})">⏹ Stop Radio</button>
+        </div>
+      </div>
+
+      <!-- SMART UTILITIES & SURVEILLANCE -->
+      <div class="panel-card">
+        <div class="card-title">⏰ Smart Utilities & CCTV Camera</div>
+        <div class="card-desc">
+          Use tablet as a 24/7 security camera, smart morning wake-up alarm clock, or open remote shell.
+        </div>
+        <div class="actions-wrap">
+          <button class="btn" onclick="runAction('alarm')">⏰ Play Morning Alarm</button>
+          <button class="btn btn-danger" onclick="runAction('alarm_stop')">⏹ Stop Alarm</button>
+          <button class="btn btn-purple" onclick="runAction('cctv_start')">📹 Start CCTV Surveillance</button>
+          <button class="btn" onclick="runAction('open_terminal')">💻 Launch Terminal</button>
         </div>
       </div>
 
@@ -687,7 +752,7 @@
         <button class="close-btn" onclick="closeDoctorModal()">&times;</button>
       </div>
       <div id="doctorContent" style="margin-bottom: 20px;">
-        <p style="color: var(--text-muted);">Running diagnostic checks...</p>
+        <p style="color: var(--text-muted);">Running diagnostics...</p>
       </div>
       <div style="display: flex; justify-content: flex-end; gap: 10px;">
         <button class="btn btn-primary" onclick="runDoctorFix()">🔧 One-Click Auto-Fix</button>
