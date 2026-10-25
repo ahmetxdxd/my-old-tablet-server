@@ -112,7 +112,7 @@ discover_network_tablets() {
             IS_TABLET=true
             # Check if ADB port is active, if not wake up adbd via SSH
             if ! check_port "$IP" 5555; then
-                ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=1 root@"$IP" \
+                ssh -n -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=1 root@"$IP" \
                     "/system/bin/setprop service.adb.tcp.port 5555; /system/bin/start adbd 2>/dev/null" >/dev/null 2>&1 || true
             fi
             which adb >/dev/null 2>&1 && adb connect "${IP}:5555" >/dev/null 2>&1 || true
@@ -137,16 +137,27 @@ discover_network_tablets() {
 
 # Scan all connected devices
 scan_devices() {
+    local DEEP_SCAN="$1"
     local ACTIVE=$(get_active_device)
     local DEVICES_FOUND=()
 
-    # Discover network candidates first
-    discover_network_tablets
+    # Always ensure ~/.ssh/config tablet host is in known list
+    if [ -f "$HOME/.ssh/config" ]; then
+        local SSH_IP=$(awk '/Host my-tablet-server/{flag=1; next} /Host /{flag=0} flag && /HostName/{print $2; exit}' "$HOME/.ssh/config" 2>/dev/null || true)
+        if [ -n "$SSH_IP" ] && ! grep -q "^${SSH_IP}$" "$KNOWN_FILE" 2>/dev/null; then
+            echo "$SSH_IP" >> "$KNOWN_FILE"
+        fi
+    fi
+
+    # Run full candidate discovery if explicitly requested or known file is empty
+    if [ "$DEEP_SCAN" = "--deep" ] || [ ! -s "$KNOWN_FILE" ]; then
+        discover_network_tablets
+    fi
 
     # 1. USB & ADB Connected Devices (includes connected Wi-Fi ADB devices)
     local ADB_LIST=$(adb devices 2>/dev/null | grep -E "\b(device|unauthorized|offline)\b" || true)
 
-    while IFS= read -r line; do
+    while IFS= read -u 9 -r line; do
         [ -z "$line" ] && continue
         local DEV_ID=$(echo "$line" | awk '{print $1}')
         local DEV_STATE=$(echo "$line" | awk '{print $2}')
@@ -167,27 +178,27 @@ scan_devices() {
         local ROOT_STATE="no"
 
         if [ "$DEV_STATE" = "device" ]; then
-            MODEL=$(adb -s "$DEV_ID" shell getprop ro.product.model 2>/dev/null | tr -d '\r\n')
-            ANDROID_VER=$(adb -s "$DEV_ID" shell getprop ro.build.version.release 2>/dev/null | tr -d '\r\n')
+            MODEL=$(adb -s "$DEV_ID" shell getprop ro.product.model 2>/dev/null < /dev/null | tr -d '\r\n')
+            ANDROID_VER=$(adb -s "$DEV_ID" shell getprop ro.build.version.release 2>/dev/null < /dev/null | tr -d '\r\n')
             [ -z "$MODEL" ] && MODEL="Android Tablet"
 
             # Check root
-            local ROOT_CHECK=$(adb -s "$DEV_ID" shell "su -c 'id'" 2>/dev/null | tr -d '\r\n')
+            local ROOT_CHECK=$(adb -s "$DEV_ID" shell "su -c 'id'" 2>/dev/null < /dev/null | tr -d '\r\n')
             if [[ "$ROOT_CHECK" == *"uid=0"* ]]; then
                 ROOT_STATE="yes"
             fi
 
             # Battery & Temp
-            BAT_CAP=$(adb -s "$DEV_ID" shell "cat /sys/class/power_supply/battery/capacity 2>/dev/null" | tr -d '\r\n')
+            BAT_CAP=$(adb -s "$DEV_ID" shell "cat /sys/class/power_supply/battery/capacity 2>/dev/null" < /dev/null | tr -d '\r\n')
             if [ -z "$BAT_CAP" ] || [[ ! "$BAT_CAP" =~ ^[0-9]+$ ]]; then
-                BAT_CAP=$(adb -s "$DEV_ID" shell "dumpsys battery 2>/dev/null | grep -i level | head -n1 | awk '{print \$2}'" | tr -d '\r\n')
+                BAT_CAP=$(adb -s "$DEV_ID" shell "dumpsys battery 2>/dev/null | grep -i level | head -n1 | awk '{print \$2}'" < /dev/null | tr -d '\r\n')
             fi
             [ -z "$BAT_CAP" ] && BAT_CAP="?"
 
-            BAT_STAT=$(adb -s "$DEV_ID" shell "cat /sys/class/power_supply/battery/status 2>/dev/null" | tr -d '\r\n')
+            BAT_STAT=$(adb -s "$DEV_ID" shell "cat /sys/class/power_supply/battery/status 2>/dev/null" < /dev/null | tr -d '\r\n')
             [ -z "$BAT_STAT" ] && BAT_STAT="Normal"
 
-            local RAW_TEMP=$(adb -s "$DEV_ID" shell "cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null" | tr -d '\r\n')
+            local RAW_TEMP=$(adb -s "$DEV_ID" shell "cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null" < /dev/null | tr -d '\r\n')
             if [ -n "$RAW_TEMP" ] && [[ "$RAW_TEMP" =~ ^[0-9]+$ ]]; then
                 if [ "$RAW_TEMP" -gt 1000 ]; then
                     TEMP="$(( RAW_TEMP / 1000 ))°C"
@@ -200,77 +211,123 @@ scan_devices() {
 
             # Wi-Fi IP if USB connected
             if [ "$DEV_TYPE" = "usb" ]; then
-                local DETECTED_IP=$(adb -s "$DEV_ID" shell "ip -4 addr show wlan0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n1" | tr -d '\r\n')
+                local DETECTED_IP=$(adb -s "$DEV_ID" shell "ip -4 addr show wlan0 2>/dev/null | awk '/inet / {print \$2}' | cut -d/ -f1 | head -n1" 2>/dev/null < /dev/null | tr -d '\r\n')
                 [ -n "$DETECTED_IP" ] && IP="$DETECTED_IP"
             fi
         fi
 
+        # Friendly model name
+        case "$MODEL" in
+            *T210*|*t210*|*lt02wifi*)
+                MODEL="Samsung Galaxy Tab 3"
+                ;;
+            *G990*|*g990*)
+                MODEL="Samsung Galaxy S21 FE (Phone)"
+                ;;
+        esac
+
         local IS_ACTIVE=false
-        if [ "$DEV_ID" = "$ACTIVE" ] || ([ -z "$ACTIVE" ] && [ ${#DEVICES_FOUND[@]} -eq 0 ]); then
+        if [ "$DEV_ID" = "$ACTIVE" ] || [ "$IP" = "$ACTIVE" ] || [ "wifi:$IP" = "$ACTIVE" ]; then
             IS_ACTIVE=true
-            [ -z "$ACTIVE" ] && set_active_device "$DEV_ID"
         fi
 
         DEVICES_FOUND+=("$DEV_ID|$DEV_TYPE|$MODEL|$ANDROID_VER|$BAT_CAP|$BAT_STAT|$TEMP|$ROOT_STATE|$IP|$DEV_STATE|$IS_ACTIVE")
-    done <<< "$ADB_LIST"
+    done 9<<< "$ADB_LIST"
 
     # 2. Known Wi-Fi IPs that are not in ADB list
+    local DEFAULT_GW=$(ip -4 route show default 2>/dev/null | awk '{print $3}' | head -n1)
+
     if [ -f "$KNOWN_FILE" ]; then
-        while IFS= read -r IP; do
+        while IFS= read -u 8 -r IP; do
             IP=$(echo "$IP" | tr -d '\r\n ')
             [ -z "$IP" ] && continue
+            [[ "$IP" == "$DEFAULT_GW" || "$IP" == "127.0.0.1" ]] && continue
 
             # Check if already added via ADB
             local ALREADY=false
             for D in "${DEVICES_FOUND[@]}"; do
-                if [[ "$D" == *"$IP"* ]]; then
+                local D_IP=$(echo "$D" | awk -F'|' '{print $9}')
+                local D_ID=$(echo "$D" | awk -F'|' '{print $1}')
+                if [ "$D_IP" = "$IP" ] || [[ "$D_ID" == "$IP"* ]]; then
                     ALREADY=true
                     break
                 fi
             done
+            [ "$ALREADY" = true ] && continue
 
-            if [ "$ALREADY" = false ]; then
-                if ping -c 1 -W 1 "$IP" >/dev/null 2>&1; then
-                    local DEV_ID="wifi:$IP"
-                    local IS_ACTIVE=false
-                    [ "$DEV_ID" = "$ACTIVE" ] && IS_ACTIVE=true
-
-                    local MODEL="Samsung Galaxy Tab 3"
-                    local ANDROID_VER="4.4.2 KitKat"
-                    local BAT_CAP="?"
-                    local BAT_STAT="Normal"
-                    local TEMP="Normal"
-                    local ROOT_STATE="yes"
-
-                    # Live SSH inspection for exact model & metrics
-                    if check_port "$IP" 22; then
-                        local SSH_CHECK=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 root@"$IP" "
-                            cat /sys/class/power_supply/battery/capacity 2>/dev/null || echo '?'
-                            cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null || echo '?'
-                            getprop ro.product.model 2>/dev/null || echo 'SM-T210'
-                        " 2>/dev/null || true)
-                        
-                        if [ -n "$SSH_CHECK" ]; then
-                            local S_BAT=$(echo "$SSH_CHECK" | sed -n '1p' | tr -d '\r\n')
-                            local S_TEMP=$(echo "$SSH_CHECK" | sed -n '2p' | tr -d '\r\n')
-                            local S_MODEL=$(echo "$SSH_CHECK" | sed -n '3p' | tr -d '\r\n')
-                            [[ "$S_BAT" =~ ^[0-9]+$ ]] && BAT_CAP="$S_BAT"
-                            if [[ "$S_TEMP" =~ ^[0-9]+$ ]] && [ "$S_TEMP" -gt 1000 ]; then
-                                TEMP="$(( S_TEMP / 1000 ))°C"
-                            elif [ -n "$S_TEMP" ] && [ "$S_TEMP" != "?" ]; then
-                                TEMP="${S_TEMP}°C"
-                            fi
-                            [ -n "$S_MODEL" ] && MODEL="$S_MODEL"
-                            ROOT_STATE="yes"
-                        fi
-                    fi
-
-                    [ ${#DEVICES_FOUND[@]} -eq 0 ] && [ -z "$ACTIVE" ] && IS_ACTIVE=true && set_active_device "$DEV_ID"
-
-                    DEVICES_FOUND+=("$DEV_ID|wifi|$MODEL|$ANDROID_VER|$BAT_CAP|$BAT_STAT|$TEMP|$ROOT_STATE|$IP|online|$IS_ACTIVE")
+            if ping -c 1 -W 1 "$IP" >/dev/null 2>&1; then
+                local DEV_ID="wifi:$IP"
+                local IS_ACTIVE=false
+                if [ "$DEV_ID" = "$ACTIVE" ] || [ "$IP" = "$ACTIVE" ]; then
+                    IS_ACTIVE=true
                 fi
+
+                local MODEL="Samsung Galaxy Tab 3"
+                local ANDROID_VER="4.4.2 KitKat"
+                local BAT_CAP="?"
+                local BAT_STAT="Normal"
+                local TEMP="Normal"
+                local ROOT_STATE="yes"
+
+                # Live SSH inspection for exact model & metrics
+                if check_port "$IP" 22; then
+                    local SSH_CHECK=$(ssh -n -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 root@"$IP" "
+                        cat /sys/class/power_supply/battery/capacity 2>/dev/null || echo '?'
+                        cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null || echo '?'
+                        /system/bin/getprop ro.product.model 2>/dev/null || getprop ro.product.model 2>/dev/null || echo 'SM-T210'
+                    " 2>/dev/null || true)
+                    
+                    if [ -n "$SSH_CHECK" ]; then
+                        local S_BAT=$(echo "$SSH_CHECK" | sed -n '1p' | tr -d '\r\n')
+                        local S_TEMP=$(echo "$SSH_CHECK" | sed -n '2p' | tr -d '\r\n')
+                        local S_MODEL=$(echo "$SSH_CHECK" | sed -n '3p' | tr -d '\r\n')
+                        [[ "$S_BAT" =~ ^[0-9]+$ ]] && BAT_CAP="$S_BAT"
+                        if [[ "$S_TEMP" =~ ^[0-9]+$ ]] && [ "$S_TEMP" -gt 1000 ]; then
+                            TEMP="$(( S_TEMP / 1000 ))°C"
+                        elif [ -n "$S_TEMP" ] && [ "$S_TEMP" != "?" ]; then
+                            TEMP="${S_TEMP}°C"
+                        fi
+                        case "$S_MODEL" in
+                            *T210*|*t210*|*lt02wifi*)
+                                MODEL="Samsung Galaxy Tab 3"
+                                ;;
+                            *G990*|*g990*)
+                                MODEL="Samsung Galaxy S21 FE (Phone)"
+                                ;;
+                            *)
+                                [ -n "$S_MODEL" ] && [ "$S_MODEL" != "?" ] && MODEL="$S_MODEL"
+                                ;;
+                        esac
+                        ROOT_STATE="yes"
+                    fi
+                fi
+
+                DEVICES_FOUND+=("$DEV_ID|wifi|$MODEL|$ANDROID_VER|$BAT_CAP|$BAT_STAT|$TEMP|$ROOT_STATE|$IP|online|$IS_ACTIVE")
             fi
-        done < "$KNOWN_FILE"
+        done 8< "$KNOWN_FILE"
+    fi
+
+    # Resolve active device if none currently set
+    local HAS_ACTIVE=false
+    for D in "${DEVICES_FOUND[@]}"; do
+        if [[ "$D" == *"|true" ]]; then
+            HAS_ACTIVE=true
+            break
+        fi
+    done
+
+    if [ "$HAS_ACTIVE" = false ] && [ ${#DEVICES_FOUND[@]} -gt 0 ]; then
+        local BEST_IDX=0
+        for i in "${!DEVICES_FOUND[@]}"; do
+            local D="${DEVICES_FOUND[$i]}"
+            if [[ "$D" == *"Tab"* || "$D" == *"T210"* || "$D" != *"(Phone)"* ]]; then
+                BEST_IDX=$i
+                break
+            fi
+        done
+        local SELECTED_DEV=$(echo "${DEVICES_FOUND[$BEST_IDX]}" | awk -F'|' '{print $1}')
+        set_active_device "$SELECTED_DEV"
+        DEVICES_FOUND[$BEST_IDX]="${DEVICES_FOUND[$BEST_IDX]%|false}|true"
     fi
 
     # Output formatted

@@ -521,7 +521,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <button class="btn" onclick="fetchDevices()">🔄 Refresh Devices</button>
+        <button class="btn" onclick="fetchDevices(true)">🔄 Refresh Devices</button>
         <button class="btn" onclick="scanNetwork()">🌐 Scan Network</button>
         <button class="btn" onclick="openDoctorModal()">🩺 Tablet Doctor</button>
         <button class="btn" id="guardBtn" onclick="runAction('battery_guard_check')">🛡️ Battery Guard: Active</button>
@@ -765,13 +765,14 @@
     let activeDeviceId = "";
     let devicesCache = [];
 
-    async function fetchDevices() {
+    async function fetchDevices(manual = false) {
       try {
-        logConsole("--> Scanning for connected devices...");
+        if (manual) logConsole("--> Scanning for connected devices...");
         const res = await fetch("/api/devices");
         const data = await res.json();
         devicesCache = data.devices || [];
         renderDevices(devicesCache);
+        if (manual) logConsole(`[OK] Found ${devicesCache.length} device(s).`);
       } catch (e) {
         logConsole("[ERROR] Could not scan devices: " + e.message);
       }
@@ -863,10 +864,15 @@
         card.className = `device-card ${isCurrentActive ? 'active' : ''}`;
         card.onclick = () => selectActiveDevice(dev.id);
 
+        const isPhone = dev.model.includes("(Phone)");
+        let devIcon = dev.type === 'usb' ? '🔌' : '📶';
+        if (isPhone) devIcon = '📱';
+        else if (dev.type === 'wifi') devIcon = '📶 📟';
+
         card.innerHTML = `
-          <div class="active-badge">ACTIVE TABLET</div>
+          <div class="active-badge">${isPhone ? 'ACTIVE PHONE' : 'ACTIVE TABLET'}</div>
           <div class="dev-header">
-            <div class="dev-icon">${dev.type === 'usb' ? '🔌' : '📶'}</div>
+            <div class="dev-icon">${devIcon}</div>
             <div>
               <div class="dev-title">${dev.model}</div>
               <div class="dev-sub">${dev.id} (${dev.type.toUpperCase()})</div>
@@ -896,7 +902,7 @@
             </div>
           </div>
           <button class="btn ${isCurrentActive ? 'btn-green' : ''}" style="width: 100%; justify-content: center; font-size: 12px;">
-            ${isCurrentActive ? '✓ Selected as Active Tablet' : '🎯 Target this Tablet'}
+            ${isCurrentActive ? (isPhone ? '✓ Selected as Active Phone' : '✓ Selected as Active Tablet') : (isPhone ? '🎯 Target this Phone' : '🎯 Target this Tablet')}
           </button>
         `;
         container.appendChild(card);
@@ -964,7 +970,17 @@
 
     function logConsole(text) {
       const box = document.getElementById("consoleOutput");
-      box.textContent = text;
+      const time = new Date().toLocaleTimeString();
+      const line = `[${time}] ${text}\n`;
+      if (box.textContent.startsWith("Ready.") || box.textContent === "Console cleared.") {
+        box.textContent = line;
+      } else {
+        box.textContent += line;
+        const lines = box.textContent.split("\n");
+        if (lines.length > 60) {
+          box.textContent = lines.slice(-60).join("\n");
+        }
+      }
       box.scrollTop = box.scrollHeight;
     }
 

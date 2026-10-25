@@ -9,7 +9,7 @@ import sys
 import json
 import subprocess
 import urllib.parse
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 
 PORT = 5055
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -34,10 +34,13 @@ class TabletServerHandler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def send_json(self, data, status=200):
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.end_headers()
-        self.wfile.write(json.dumps(data).encode("utf-8"))
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(data).encode("utf-8"))
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def run_cmd(self, cmd_args):
         try:
@@ -55,8 +58,14 @@ class TabletServerHandler(SimpleHTTPRequestHandler):
         if path == "/api/devices":
             dev_script = os.path.join(BIN_DIR, "tablet-devices")
             success, out = self.run_cmd([dev_script, "json"])
+            devices = []
             try:
-                devices = json.loads(out)
+                s_idx = out.find("[")
+                e_idx = out.rfind("]")
+                if s_idx != -1 and e_idx != -1 and e_idx > s_idx:
+                    devices = json.loads(out[s_idx:e_idx + 1])
+                else:
+                    devices = json.loads(out)
             except Exception:
                 devices = []
             self.send_json({"devices": devices})
@@ -220,7 +229,7 @@ def run():
     print(f"  URL: http://127.0.0.1:{PORT}")
     print(f"================================================================")
     server_address = ("127.0.0.1", PORT)
-    httpd = HTTPServer(server_address, TabletServerHandler)
+    httpd = ThreadingHTTPServer(server_address, TabletServerHandler)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
